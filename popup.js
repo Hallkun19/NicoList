@@ -1,12 +1,7 @@
 /**
  * ============================================================
- * NicoList - Popup Script (v1.4)
+ * NicoList - Popup Script
  * ============================================================
- * 
- * 改善点 (v1.4):
- *  - マイリストアイコンをフォルダ型(SVG)に変更
- *  - 動画情報メタデータ「投稿日」「連携(追加)日」を分離表示
- *  - マイリスト取り込み時に既存のリストを選択可能に
  */
 
 (function () {
@@ -33,18 +28,18 @@
   const viewLists = document.getElementById('view-lists');
   const viewVideos = document.getElementById('view-videos');
   const viewSettings = document.getElementById('view-settings');
-  
+
   const listsContainer = document.getElementById('lists-container');
   const videosContainer = document.getElementById('videos-container');
-  
+
   // Handlers binding
   document.getElementById('btn-create-list').addEventListener('click', handleCreateList);
   document.getElementById('input-new-list').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleCreateList(); });
-  
+
   document.getElementById('btn-back-to-lists').addEventListener('click', () => switchView(viewLists));
   document.getElementById('btn-back-to-lists-from-settings').addEventListener('click', () => { switchView(viewLists); loadLists(); });
   document.getElementById('btn-settings').addEventListener('click', () => { switchView(viewSettings); loadImportTargets(); loadSettings(); });
-  
+
   document.getElementById('select-sort').addEventListener('change', loadVideos);
   document.getElementById('btn-play-continuous').addEventListener('click', () => handlePlay(false));
   document.getElementById('btn-play-shuffle').addEventListener('click', () => handlePlay(true));
@@ -109,7 +104,7 @@
     viewLists.classList.remove('active'); viewLists.classList.add('hidden');
     viewVideos.classList.remove('active'); viewVideos.classList.add('hidden');
     viewSettings.classList.remove('active'); viewSettings.classList.add('hidden');
-    
+
     viewElement.classList.remove('hidden');
     viewElement.classList.add('active');
   }
@@ -133,7 +128,7 @@
         listsContainer.appendChild(item);
       }
       setupDragAndDrop();
-      
+
       // バックグラウンドでセレクトボックスを更新しておく
       if (document.getElementById('select-import-target')) loadImportTargets(lists);
     } catch (err) {
@@ -170,7 +165,7 @@
     const el = document.createElement('div');
     el.className = 'list-item';
     el.dataset.id = list.id;
-    
+
     el.innerHTML = `
       <div class="list-header" tabindex="0">
         <div class="drag-handle" title="ドラッグして並び替え">${ICONS.drag}</div>
@@ -226,10 +221,10 @@
 
   function setupDragAndDrop() {
     const items = Array.from(listsContainer.querySelectorAll('.list-item'));
-    
+
     items.forEach(item => {
       const handle = item.querySelector('.drag-handle');
-      
+
       handle.addEventListener('mousedown', () => { item.setAttribute('draggable', 'true'); });
       handle.addEventListener('mouseup', () => { item.removeAttribute('draggable'); });
       handle.addEventListener('mouseleave', () => { item.removeAttribute('draggable'); });
@@ -253,10 +248,10 @@
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         if (item === draggedItem) return;
-        
+
         const rect = item.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
-        
+
         items.forEach(i => i.classList.remove('drag-over', 'drag-up', 'drag-down'));
         item.classList.add('drag-over');
 
@@ -307,7 +302,7 @@
   async function loadVideos() {
     if (!currentListId) return;
     videosContainer.innerHTML = '<div class="loading">読み込み中...</div>';
-    
+
     const sortVal = document.getElementById('select-sort').value;
     const [sortKey, sortOrder] = sortVal.split('_');
 
@@ -322,7 +317,7 @@
       }
 
       videosContainer.innerHTML = '';
-      
+
       // v2.0: 段階ロード（50件ずつ）
       const PAGE_SIZE = 50;
       let loadedCount = 0;
@@ -333,7 +328,7 @@
           videosContainer.appendChild(createVideoItemElement(videos[i]));
         }
         loadedCount = end;
-        
+
         // まだ残りがある場合はセンチネル要素を配置
         if (loadedCount < videos.length) {
           let sentinel = document.getElementById('nicolist-load-more');
@@ -345,7 +340,7 @@
             sentinel.textContent = `さらに読み込み中... (${loadedCount}/${videos.length})`;
           }
           videosContainer.appendChild(sentinel);
-          
+
           const observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting) {
               observer.disconnect();
@@ -356,7 +351,7 @@
           observer.observe(sentinel);
         }
       }
-      
+
       loadBatch();
     } catch (err) {
       videosContainer.innerHTML = `<div class="empty" style="color:var(--nl-danger);">エラー: ${err.message}</div>`;
@@ -366,15 +361,15 @@
   function createVideoItemElement(video) {
     const el = document.createElement('div');
     el.className = 'video-item';
-    
+
     // v2.0: site対応URL
     const watchUrl = video.site === 'youtube'
       ? `https://www.youtube.com/watch?v=${video.videoId}`
       : `https://www.nicovideo.jp/watch/${video.videoId}`;
     const postedDateStr = new Date(video.postedAt || 0).toLocaleDateString();
     const addedDateStr = new Date(video.addedAt || video.postedAt).toLocaleDateString();
-    
-    
+
+
     // v1.4+: 再生時間(duration)削除, 投稿日時上部移動, 登録日時右下固定
     el.innerHTML = `
       <a href="${watchUrl}" target="_blank" class="video-thumb" title="新しいタブで開く">
@@ -440,12 +435,12 @@
     const btn = document.getElementById('btn-refresh-videos');
     const originalHTML = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>更新中...';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
     try {
       const res = await chrome.runtime.sendMessage({ action: 'refreshVideos', listId: currentListId });
       if (res.success) {
         await loadVideos();
-        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>${res.updated}/${res.total} 件更新`;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>完了';
         setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
       } else {
         throw new Error(res.error || '更新失敗');
@@ -476,7 +471,7 @@
   async function handleImport(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     if (!confirm('現在のデータをすべて上書きインポートしますか？\n(取り消しはできません)')) {
       e.target.value = '';
       return;
@@ -508,18 +503,18 @@
 
     const mylistIdMatch = mylistIdRaw.match(/\d+/);
     if (!mylistIdMatch) { alert('有効なマイリストIDを入力してください'); return; }
-    
+
     const mylistId = mylistIdMatch[0];
     const statusEl = document.getElementById('mylist-status');
     const btn = document.getElementById('btn-import-mylist');
-    
+
     statusEl.textContent = 'マイリストを取得中... (上限500件)';
     statusEl.className = 'status-msg';
     btn.disabled = true;
 
     try {
       const resp = await chrome.runtime.sendMessage({ action: 'fetchMylistVideos', mylistId });
-      
+
       if (!resp || !resp.success || !resp.videos || resp.videos.length === 0) {
         throw new Error(resp?.error || '動画が見つかりません。公開設定になっているか確認してください。');
       }
@@ -555,7 +550,7 @@
       statusEl.textContent = `完了! ${addedCount}件の動画を取り込みました。`;
       statusEl.className = 'status-msg success';
       mlInput.value = '';
-      
+
       loadLists(); // 背景でリスト再ロード
     } catch (e) {
       statusEl.textContent = `エラー: ${e.message}`;

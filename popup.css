@@ -124,9 +124,10 @@ svg { flex-shrink: 0; }
 
 .video-controls {
   display: flex; align-items: center; justify-content: space-between; padding: 8px 12px;
-  background: var(--nl-bg-card); border-bottom: 1px solid var(--nl-border); gap: 6px; flex-wrap: wrap;
+  background: var(--nl-bg-card); border-bottom: 1px solid var(--nl-border); gap: 4px; flex-wrap: nowrap;
 }
-.control-group { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.control-group { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.control-group select { min-width: 0; flex-shrink: 1; }
 select {
   background: var(--nl-bg-input); color: var(--nl-text); border: 1px solid var(--nl-border);
   padding: 6px 8px; border-radius: var(--nl-radius-sm); font-size: 12px; outline: none;

@@ -17,8 +17,6 @@
 
 ## インストール
 
-### Chrome ウェブストアから（未公開の場合）
-
 1. [Releases](../../releases) から最新の ZIP をダウンロード
 2. ZIP を展開
 3. `chrome://extensions` を開く

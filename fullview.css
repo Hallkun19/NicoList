@@ -196,12 +196,13 @@ svg { flex-shrink: 0; }
 .grid .fv-video-stats { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--nl-text-muted); align-items: center; }
 .grid .fv-video-stats span { display: flex; align-items: center; gap: 3px; }
 
-.grid .fv-btn-remove-vid {
+.grid .fv-btn-remove-vid, .grid .fv-btn-memo-vid {
   background: var(--nl-bg-input); border: 1px solid var(--nl-border); color: var(--nl-text-muted);
   width: 26px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: 0.2s; flex-shrink: 0;
 }
 .grid .fv-btn-remove-vid:hover { background: var(--nl-danger); color: #fff; border-color: var(--nl-danger); }
+.grid .fv-btn-memo-vid:hover { background: var(--nl-primary); color: #fff; border-color: var(--nl-primary); }
 
 /* Gridモードでは説明文は非表示完全に */
 .grid .fv-video-desc { display: none; }
@@ -247,12 +248,13 @@ svg { flex-shrink: 0; }
 .list .fv-video-stats { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--nl-text-secondary); }
 .list .fv-video-stats span { display: flex; align-items: center; gap: 4px; }
 
-.list .fv-btn-remove-vid {
+.list .fv-btn-remove-vid, .list .fv-btn-memo-vid {
   background: var(--nl-bg-input); border: 1px solid var(--nl-border); color: var(--nl-text-muted);
   width: 26px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: 0.2s; flex-shrink: 0;
 }
 .list .fv-btn-remove-vid:hover { background: var(--nl-danger); color: #fff; border-color: var(--nl-danger); }
+.list .fv-btn-memo-vid:hover { background: var(--nl-primary); color: #fff; border-color: var(--nl-primary); }
 
 .list .fv-video-owner-area { display: flex; align-items: center; gap: 6px; margin: 2px 0 0 0 !important; font-size: 11.5px; color: var(--nl-text-secondary); }
 .list .fv-owner-icon-small { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; background: var(--nl-border); flex-shrink: 0;}
@@ -345,5 +347,44 @@ svg { flex-shrink: 0; }
 /* 共有ボタン（サイドバー） */
 .btn-share { color: var(--nl-primary) !important; }
 .btn-share:hover { color: var(--nl-primary-hover) !important; }
+
+/* 汎用モーダル */
+.fv-modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.fv-modal-overlay.hidden { display: none; }
+.fv-modal-content {
+  background: var(--nl-bg-card); padding: 20px 24px; border-radius: var(--nl-radius);
+  width: 90%; max-width: 400px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.fv-modal-content h3 { margin: 0; font-size: 16px; color: var(--nl-text); }
+.fv-modal-input {
+  width: 100%; padding: 10px 14px; border-radius: var(--nl-radius-sm);
+  border: 1px solid var(--nl-border); background: var(--nl-bg-input); color: var(--nl-text);
+  outline: none; font-size: 14px; box-sizing: border-box;
+}
+.fv-modal-input:focus { border-color: var(--nl-primary); }
+.fv-modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+
+/* 動画メモ */
+.fv-video-memo {
+  font-size: 11px; color: var(--nl-text-secondary); background: rgba(0,0,0,0.2);
+  padding: 3px 8px; border-radius: 4px; word-break: break-all; margin-top: 6px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.grid .fv-video-memo {
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin-top: 4px;
+}
+.grid .fv-video-memo.expanded, .list .fv-video-memo.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+}
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

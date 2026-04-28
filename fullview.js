@@ -220,6 +220,41 @@
   }
 
   // ═══════════════════════════════════════════════════════════
+  //  Generic Modal Logic
+  // ═══════════════════════════════════════════════════════════
+  function showFvTextInputModal(title, initialValue, placeholder, onSave) {
+    const modal = document.getElementById('fv-modal-text-input');
+    const titleEl = document.getElementById('fv-modal-text-title');
+    const inputEl = document.getElementById('fv-modal-text-input-field');
+    const btnCancel = document.getElementById('btn-fv-modal-text-cancel');
+    const btnSave = document.getElementById('btn-fv-modal-text-save');
+
+    titleEl.textContent = title;
+    inputEl.value = initialValue || '';
+    inputEl.placeholder = placeholder || '';
+
+    modal.classList.remove('hidden');
+    inputEl.focus();
+
+    const close = () => {
+      modal.classList.add('hidden');
+      btnCancel.onclick = null;
+      btnSave.onclick = null;
+      inputEl.onkeydown = null;
+    };
+
+    btnCancel.onclick = close;
+    btnSave.onclick = () => {
+      onSave(inputEl.value.trim());
+      close();
+    };
+    inputEl.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); btnSave.onclick(); }
+      if (e.key === 'Escape') btnCancel.onclick();
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════
   //  View Mode Logic
   // ═══════════════════════════════════════════════════════════
   function setViewMode(mode) {
@@ -295,14 +330,15 @@
       loadVideos();
     });
 
-    el.querySelector('.btn-rename').addEventListener('click', async (e) => {
+    el.querySelector('.btn-rename').addEventListener('click', (e) => {
       e.stopPropagation();
-      const newName = prompt('新しいリスト名:', list.name);
-      if (newName && newName.trim() !== '' && newName !== list.name) {
-        await chrome.runtime.sendMessage({ action: 'updateListName', id: list.id, name: newName.trim() });
-        loadLists();
-        if (currentListId === list.id) { titleEl.textContent = newName.trim(); }
-      }
+      showFvTextInputModal('リスト名の変更', list.name, '新しいリスト名', async (newName) => {
+        if (newName && newName !== list.name) {
+          await chrome.runtime.sendMessage({ action: 'updateListName', id: list.id, name: newName });
+          loadLists();
+          if (currentListId === list.id) { titleEl.textContent = newName; }
+        }
+      });
     });
 
     el.querySelector('.btn-delete').addEventListener('click', async (e) => {
@@ -499,9 +535,13 @@
             <span title="いいね数">${ICONS.like} ${formatCount(video.likeCount)}</span>
             ${video.mylistCount >= 0 ? `<span title="マイリスト数">${ICONS.mylist} ${formatCount(video.mylistCount)}</span>` : ''}
           </div>
-          <button class="fv-btn-remove-vid" title="リストから削除">${ICONS.trash}</button>
+          <div style="display:flex; gap:4px;">
+            <button class="fv-btn-memo-vid" title="メモを編集">${ICONS.edit}</button>
+            <button class="fv-btn-remove-vid" title="リストから削除">${ICONS.trash}</button>
+          </div>
         </div>
         
+        ${video.memo ? `<div class="fv-video-memo">${escapeHtml(video.memo)}</div>` : ''}
         <div class="fv-video-desc">${escapeHtml(video.description || '説明文なし')}</div>
         
         <div class="fv-video-footer">
@@ -509,6 +549,14 @@
         </div>
       </div>
     `;
+
+    const memoEl = el.querySelector('.fv-video-memo');
+    if (memoEl) {
+      memoEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        memoEl.classList.toggle('expanded');
+      });
+    }
 
     el.querySelector('.fv-btn-remove-vid').addEventListener('click', async (e) => {
       e.preventDefault(); e.stopPropagation();
@@ -524,6 +572,16 @@
         }
         loadLists();
       }
+    });
+
+    el.querySelector('.fv-btn-memo-vid').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      showFvTextInputModal('メモを編集', video.memo, 'メモ内容を入力 (空で削除)', async (newMemo) => {
+        try {
+          await chrome.runtime.sendMessage({ action: 'updateVideoMemo', videoDbId: video.id, memo: newMemo });
+          loadVideos();
+        } catch (err) { alert('メモの更新に失敗しました'); }
+      });
     });
 
     return el;

@@ -195,15 +195,16 @@
       openVideoList(list.id, list.name);
     });
 
-    el.querySelector('.btn-rename').addEventListener('click', async (e) => {
+    el.querySelector('.btn-rename').addEventListener('click', (e) => {
       e.stopPropagation();
-      const newName = prompt('新しいリスト名:', list.name);
-      if (newName && newName.trim() !== '' && newName !== list.name) {
-        try {
-          await chrome.runtime.sendMessage({ action: 'updateListName', id: list.id, name: newName.trim() });
-          loadLists();
-        } catch (e) { alert('更新に失敗しました'); }
-      }
+      showTextInputModal('リスト名の変更', list.name, '新しいリスト名', async (newName) => {
+        if (newName && newName !== list.name) {
+          try {
+            await chrome.runtime.sendMessage({ action: 'updateListName', id: list.id, name: newName });
+            loadLists();
+          } catch (e) { alert('更新に失敗しました'); }
+        }
+      });
     });
 
     el.querySelector('.btn-delete').addEventListener('click', async (e) => {
@@ -387,18 +388,30 @@
           </div>
         </div>
 
-        <div class="video-stats-row">
-          <span title="再生数">${ICONS.view} ${formatCount(video.viewCount)}</span>
-          <span title="いいね数">${ICONS.like} ${formatCount(video.likeCount)}</span>
+        <div class="video-stats-row" style="justify-content: space-between;">
+          <div style="display: flex; gap: 8px;">
+            <span title="再生数">${ICONS.view} ${formatCount(video.viewCount)}</span>
+            <span title="いいね数">${ICONS.like} ${formatCount(video.likeCount)}</span>
             ${video.mylistCount >= 0 ? `<span title="マイリスト数">${ICONS.mylist} ${formatCount(video.mylistCount)}</span>` : ''}
+          </div>
+          <div class="video-added-date" style="position: static; text-align: right; margin: 0; padding: 0;">登録: ${addedDateStr}</div>
         </div>
 
-        <div class="video-added-date">登録: ${addedDateStr}</div>
+        ${video.memo ? `<div class="video-memo">${escapeHtml(video.memo)}</div>` : ''}
       </div>
       <div class="video-actions">
+        <button class="icon-btn btn-memo" title="メモを編集" style="color:var(--nl-text); margin-right:4px;">${ICONS.edit}</button>
         <button class="icon-btn btn-remove" title="リストから削除">${ICONS.trash}</button>
       </div>
     `;
+
+    const memoEl = el.querySelector('.video-memo');
+    if (memoEl) {
+      memoEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        memoEl.classList.toggle('expanded');
+      });
+    }
 
     el.querySelector('.btn-remove').addEventListener('click', async (e) => {
       e.preventDefault();
@@ -407,11 +420,22 @@
         try {
           await chrome.runtime.sendMessage({ action: 'removeVideo', videoDbId: video.id });
           el.remove();
-          if (videosContainer.children.length === 0) {
+          if (videosContainer.children.length === 0 || (videosContainer.children.length === 1 && videosContainer.firstElementChild.id === 'nicolist-load-more')) {
             videosContainer.innerHTML = '<div class="empty">動画がありません。</div>';
           }
         } catch (e) { alert('削除に失敗しました'); }
       }
+    });
+
+    el.querySelector('.btn-memo').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showTextInputModal('メモを編集', video.memo, 'メモ内容を入力 (空で削除)', async (newMemo) => {
+        try {
+          await chrome.runtime.sendMessage({ action: 'updateVideoMemo', videoDbId: video.id, memo: newMemo });
+          loadVideos();
+        } catch (err) { alert('メモの更新に失敗しました'); }
+      });
     });
 
     return el;
@@ -455,6 +479,39 @@
   // ═══════════════════════════════════════════════════════════
   //  Settings & Utils
   // ═══════════════════════════════════════════════════════════
+
+  function showTextInputModal(title, initialValue, placeholder, onSave) {
+    const modal = document.getElementById('modal-text-input');
+    const titleEl = document.getElementById('modal-text-title');
+    const inputEl = document.getElementById('modal-text-input-field');
+    const btnCancel = document.getElementById('btn-modal-text-cancel');
+    const btnSave = document.getElementById('btn-modal-text-save');
+
+    titleEl.textContent = title;
+    inputEl.value = initialValue || '';
+    inputEl.placeholder = placeholder || '';
+
+    modal.classList.remove('hidden');
+    inputEl.focus();
+
+    const close = () => {
+      modal.classList.add('hidden');
+      btnCancel.onclick = null;
+      btnSave.onclick = null;
+      inputEl.onkeydown = null;
+    };
+
+    btnCancel.onclick = close;
+    btnSave.onclick = () => {
+      onSave(inputEl.value.trim());
+      close();
+    };
+    inputEl.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); btnSave.onclick(); }
+      if (e.key === 'Escape') btnCancel.onclick();
+    };
+  }
+
   async function handleExport() {
     try {
       const data = await chrome.runtime.sendMessage({ action: 'exportAll' });

@@ -157,6 +157,7 @@ async function handleMessage(msg, sender) {
     case 'getVideos':        return await getVideos(msg.listId, msg.sortKey, msg.sortOrder);
     case 'getVideoCount':    return await getVideoCount(msg.listId);
     case 'removeVideo':      return await removeVideo(msg.videoDbId);
+    case 'updateVideoMemo':  return await updateVideoMemo(msg.videoDbId, msg.memo);
     case 'isVideoInList':    return await isVideoInList(msg.listId, msg.videoId);
 
     // ─── 連続再生 ─────────────────────────────
@@ -388,6 +389,27 @@ async function isVideoInList(listId, videoId) {
     const req = index.get([listId, videoId]);
     req.onsuccess = () => resolve(!!req.result);
     req.onerror = () => reject(new Error('重複チェック失敗'));
+  });
+}
+
+async function updateVideoMemo(videoDbId, memo) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('videos', 'readwrite');
+    const store = tx.objectStore('videos');
+    const getReq = store.get(videoDbId);
+    getReq.onsuccess = () => {
+      const video = getReq.result;
+      if (!video) {
+        reject(new Error('動画が見つかりません'));
+        return;
+      }
+      video.memo = memo;
+      const putReq = store.put(video);
+      putReq.onsuccess = () => resolve({ success: true });
+      putReq.onerror = () => reject(new Error('メモの更新に失敗'));
+    };
+    getReq.onerror = () => reject(new Error('動画の取得に失敗'));
   });
 }
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NicoList - 動画リスト拡張",
-  "version": "2.0.0",
+  "version": "1.0.1",
   "description": "ニコニコ動画・YouTubeのマイリスト機能を拡張・強化する Chrome 拡張機能",
   "permissions": [
     "storage",
@@ -25,16 +25,26 @@
       "matches": [
         "*://*.nicovideo.jp/watch/*"
       ],
-      "js": ["storage.js", "content.js"],
-      "css": ["content.css"],
+      "js": [
+        "storage.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     },
     {
       "matches": [
         "*://*.youtube.com/watch*"
       ],
-      "js": ["storage.js", "content-youtube.js"],
-      "css": ["content.css"],
+      "js": [
+        "storage.js",
+        "content-youtube.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ],

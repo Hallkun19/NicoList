@@ -1,0 +1,349 @@
+/**
+ * ============================================================
+ * NicoList - FullView CSS (v1.4)
+ * ============================================================
+ * 
+ * 改善点(v1.4):
+ *  - グリッドの大きさが潰れないように min-width や overflow を調整
+ *  - サムネイルのアスペクト比固定 (`aspect-ratio: 16/9;`) と `object-fit: cover` 徹底
+ *  - 表示モードに応じた説明文の表示・非表示の完全分離
+ */
+
+:root {
+  --nl-primary: #007cff;
+  --nl-primary-hover: #0066d6;
+  --nl-bg-dark: #121212;
+  --nl-bg-header: #1e1e1e;
+  --nl-bg-card: #252525;
+  --nl-bg-sidebar: #1a1a1a;
+  --nl-bg-hover: #2e2e2e;
+  --nl-bg-input: #333333;
+  --nl-text: #e0e0e0;
+  --nl-text-secondary: #b0b0b0;
+  --nl-text-muted: #808080;
+  --nl-border: #3a3a3a;
+  --nl-danger: #e04040;
+  --nl-success: #00b06b;
+  --nl-radius: 8px;
+  --nl-radius-sm: 4px;
+  --nl-font: 'Segoe UI', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
+  --nl-transition: 0.2s ease;
+}
+
+body {
+  margin: 0; padding: 0; width: 100vw; height: 100vh;
+  background: var(--nl-bg-dark); color: var(--nl-text);
+  font-family: var(--nl-font); display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+* { box-sizing: border-box; }
+svg { flex-shrink: 0; }
+
+.fv-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; background: var(--nl-bg-header); border-bottom: 1px solid var(--nl-border);
+  height: 60px; flex-shrink: 0;
+}
+.fv-logo { display: flex; align-items: center; gap: 10px; }
+.fv-logo h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+
+.fv-header-actions { display: flex; align-items: center; gap: 16px; }
+
+.fv-view-toggle {
+  display: flex; background: var(--nl-bg-input); border-radius: var(--nl-radius-sm);
+  padding: 2px; border: 1px solid var(--nl-border);
+}
+.fv-icon-btn {
+  background: transparent; border: none; padding: 6px; border-radius: 3px;
+  color: var(--nl-text-muted); cursor: pointer; transition: all var(--nl-transition);
+  display: flex; align-items: center; justify-content: center;
+}
+.fv-icon-btn:hover { color: var(--nl-text); }
+.fv-icon-btn.active { background: var(--nl-bg-hover); color: var(--nl-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+.fv-action-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--nl-bg-input); border: 1px solid var(--nl-border); color: var(--nl-text);
+  padding: 8px 16px; border-radius: var(--nl-radius-sm); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: var(--nl-transition); font-family: var(--nl-font);
+}
+.fv-action-btn:hover { background: var(--nl-bg-hover); border-color: var(--nl-text-muted); }
+.fv-action-btn.primary { background: var(--nl-primary); border-color: var(--nl-primary); color: #fff; }
+.fv-action-btn.primary:hover { background: var(--nl-primary-hover); }
+
+/* レイアウト */
+.fv-container { display: flex; flex: 1; overflow: hidden; }
+
+/* サイドバー */
+.fv-sidebar {
+  width: 320px; background: var(--nl-bg-sidebar); border-right: 1px solid var(--nl-border);
+  display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+}
+.fv-sidebar-header { padding: 16px; border-bottom: 1px solid var(--nl-border); }
+.fv-sidebar-header h2 { margin: 0 0 12px 0; font-size: 15px; font-weight: 600; }
+
+.fv-list-create { display: flex; gap: 8px; }
+.fv-list-create input {
+  flex: 1; padding: 8px 12px; border-radius: var(--nl-radius-sm); border: 1px solid var(--nl-border);
+  background: var(--nl-bg-input); color: var(--nl-text); font-size: 13px; font-family: var(--nl-font); outline: none;
+}
+.fv-list-create input:focus { border-color: var(--nl-primary); }
+.fv-list-create button {
+  padding: 8px; border-radius: var(--nl-radius-sm); background: var(--nl-primary); color: #fff;
+  border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.fv-list-create button:hover { background: var(--nl-primary-hover); }
+
+/* サイドバーリストアイテム */
+.fv-list-item {
+  padding: 12px 16px; border-bottom: 1px solid var(--nl-bg-dark); cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; transition: var(--nl-transition);
+}
+.fv-list-item:hover { background: var(--nl-bg-hover); }
+.fv-list-item.active { background: var(--nl-primary-light, rgba(0,124,255,0.15)); border-left: 3px solid var(--nl-primary); padding-left: 13px; }
+.fv-list-item.dragging { opacity: 0.5; border: 1px dashed var(--nl-primary); }
+.fv-list-item.drag-over { border-top: 2px solid var(--nl-primary); }
+
+.fv-list-drag-handle { color: var(--nl-text-muted); padding-right: 8px; cursor: grab; display: flex; align-items: center; }
+.fv-list-drag-handle:active { cursor: grabbing; }
+
+.fv-list-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+.fv-list-name { font-size: 14px; font-weight: 500; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.fv-list-meta { font-size: 11px; color: var(--nl-text-muted); }
+.fv-list-actions { display: flex; gap: 6px; opacity: 0; transition: 0.2s; }
+.fv-list-item:hover .fv-list-actions { opacity: 1; }
+
+.fv-scrollable { flex: 1; overflow-y: auto; overflow-x: hidden; }
+.fv-scrollable::-webkit-scrollbar { width: 8px; }
+.fv-scrollable::-webkit-scrollbar-track { background: transparent; }
+.fv-scrollable::-webkit-scrollbar-thumb { background: var(--nl-border); border-radius: 4px; border: 2px solid var(--nl-bg-dark); }
+.fv-scrollable::-webkit-scrollbar-thumb:hover { background: var(--nl-text-muted); }
+
+/* メインコンテンツ */
+.fv-main { flex: 1; display: flex; flex-direction: column; background: var(--nl-bg-dark); min-width: 0; }
+.fv-main-header {
+  padding: 16px 32px; border-bottom: 1px solid var(--nl-border); background: var(--nl-bg-card);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.fv-main-title-area h2 { margin: 0 0 6px 0; font-size: 24px; font-weight: 600; }
+.fv-meta-text { font-size: 13px; color: var(--nl-text-secondary); }
+
+.fv-main-controls { display: flex; gap: 12px; align-items: center; }
+.fv-main-controls.hidden { display: none; }
+.fv-main-controls select {
+  background: var(--nl-bg-input); color: var(--nl-text); border: 1px solid var(--nl-border);
+  padding: 8px 12px; border-radius: var(--nl-radius-sm); font-size: 13px; outline: none; font-family: var(--nl-font);
+}
+
+.fv-loading, .fv-empty { text-align: center; padding: 60px 20px; color: var(--nl-text-muted); font-size: 14px; }
+
+/* ─────────────────────────────────────────────────────────
+ * 動画一覧 (Grid & List表示切替対応)
+ * ───────────────────────────────────────────────────────── */
+#fv-videos-container { 
+  padding: 20px 28px; 
+  align-content: flex-start;
+  overflow-y: auto; 
+  flex: 1;
+}
+
+/* ======== GRID モード ======== */
+#fv-videos-container.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  grid-auto-rows: max-content;
+  align-items: start;
+}
+.grid .fv-video-card {
+  display: flex; flex-direction: column; background: var(--nl-bg-card);
+  border-radius: var(--nl-radius); border: 1px solid var(--nl-border);
+  overflow: hidden; transition: transform var(--nl-transition), box-shadow var(--nl-transition);
+  min-width: 200px;
+}
+.grid .fv-video-card:hover { transform: translateY(-4px); box-shadow: 0 6px 24px rgba(0,0,0,0.4); }
+
+.grid .fv-video-thumb {
+  position: relative; width: 100%; aspect-ratio: 16/9; background: #000; display: block; overflow: hidden;
+}
+.grid .fv-video-thumb img { width: 100%; height: 100%; object-fit: cover; background: #000; opacity: 0.9; transition: 0.3s; display: block; margin: 0; padding: 0; }
+.grid .fv-video-card:hover .fv-video-thumb img { opacity: 1; transform: scale(1.05); }
+
+/* .grid .fv-video-duration removed */
+
+.grid .fv-video-info { padding: 10px 12px; display: flex; flex-direction: column; flex: 1; position: relative; gap: 0; }
+.grid .fv-video-title { 
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; 
+  font-size: 13.5px; font-weight: 600; color: var(--nl-text); text-decoration: none; 
+  line-height: 1.35; margin-bottom: 2px !important;
+}
+.grid .fv-video-title:hover { color: var(--nl-primary); text-decoration: underline; }
+
+.grid .fv-video-posted-date {
+  font-size: 11px; color: var(--nl-text-muted); margin-bottom: 2px !important; line-height: 1;
+}
+
+.grid .fv-video-owner-area {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; color: var(--nl-text-secondary);
+}
+.grid .fv-owner-icon-small { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: var(--nl-border); flex-shrink:0; }
+.grid .fv-owner-name-small { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+
+.grid .fv-video-stats-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;
+}
+.grid .fv-video-stats { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--nl-text-muted); align-items: center; }
+.grid .fv-video-stats span { display: flex; align-items: center; gap: 3px; }
+
+.grid .fv-btn-remove-vid {
+  background: var(--nl-bg-input); border: 1px solid var(--nl-border); color: var(--nl-text-muted);
+  width: 26px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: 0.2s; flex-shrink: 0;
+}
+.grid .fv-btn-remove-vid:hover { background: var(--nl-danger); color: #fff; border-color: var(--nl-danger); }
+
+/* Gridモードでは説明文は非表示完全に */
+.grid .fv-video-desc { display: none; }
+
+.grid .fv-video-footer { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 4px; border-top: 1px solid var(--nl-border); margin-top: auto; }
+.grid .fv-video-added-date { font-size: 10px; color: var(--nl-text-muted); line-height: 1; }
+
+
+/* ======== LIST モード ======== */
+#fv-videos-container.list {
+  display: flex; flex-direction: column; gap: 8px; /* 要素間を狭める */
+}
+.list .fv-video-card {
+  display: flex; flex-direction: row; background: var(--nl-bg-card);
+  border-radius: var(--nl-radius); border: 1px solid var(--nl-border);
+  overflow: hidden; transition: var(--nl-transition); padding: 8px 12px; gap: 14px; min-height: 80px; /* コンパクト化 */
+}
+.list .fv-video-card:hover { background: var(--nl-bg-hover); border-color: var(--nl-text-muted); }
+
+/* アスペクト比固定と徹底的な見切れ防止 */
+.list .fv-video-thumb {
+  position: relative; width: 140px; flex-shrink: 0; aspect-ratio: 16 / 9; background: #000; border-radius: var(--nl-radius-sm); overflow: hidden;
+}
+.list .fv-video-thumb img { width: 100%; height: 100%; object-fit: cover !important; background: #000; opacity: 0.9; transition: 0.3s; display: block; }
+.list .fv-video-card:hover .fv-video-thumb img { opacity: 1; }
+
+/* .list .fv-video-duration removed */
+
+.list .fv-video-info { display: flex; flex-direction: column; flex: 1; min-width: 0; justify-content: center; position: relative; gap: 0; }
+.list .fv-video-title { 
+  font-size: 13.5px; font-weight: 600; color: var(--nl-text); text-decoration: none; 
+  line-height: 1.4; margin-bottom: 2px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+}
+.list .fv-video-title:hover { color: var(--nl-primary); text-decoration: underline; }
+
+.list .fv-video-posted-date {
+  font-size: 11px; color: var(--nl-text-muted); margin-bottom: 2px !important; line-height: 1;
+}
+
+.list .fv-video-stats-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px !important;
+}
+.list .fv-video-stats { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--nl-text-secondary); }
+.list .fv-video-stats span { display: flex; align-items: center; gap: 4px; }
+
+.list .fv-btn-remove-vid {
+  background: var(--nl-bg-input); border: 1px solid var(--nl-border); color: var(--nl-text-muted);
+  width: 26px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: 0.2s; flex-shrink: 0;
+}
+.list .fv-btn-remove-vid:hover { background: var(--nl-danger); color: #fff; border-color: var(--nl-danger); }
+
+.list .fv-video-owner-area { display: flex; align-items: center; gap: 6px; margin: 2px 0 0 0 !important; font-size: 11.5px; color: var(--nl-text-secondary); }
+.list .fv-owner-icon-small { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; background: var(--nl-border); flex-shrink: 0;}
+.list .fv-owner-name-small { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+
+/* Listモードでは説明文を非表示 (コンパクト化優先) */
+.list .fv-video-desc { 
+  display: none;
+}
+
+.list .fv-video-footer { display: flex; flex-direction: row; gap: 12px; justify-content: flex-end; align-items: center; flex-shrink: 0; border: none; padding-top: 0; margin-top: 0; min-width:80px; }
+.list .fv-video-added-date { font-size: 11px; color: var(--nl-text-muted); line-height:1.2; text-align:right; }
+
+
+/* 共通のアクション（削除ボタン等） */
+.fv-btn-remove-vid {
+  background: var(--nl-bg-input); border: 1px solid var(--nl-border); color: var(--nl-text-muted); padding: 8px; border-radius: var(--nl-radius-sm); cursor: pointer; display: flex; align-items: center; transition: 0.2s;
+}
+.fv-btn-remove-vid:hover { background: rgba(224, 64, 64, 0.1); border-color: var(--nl-danger); color: var(--nl-danger); }
+
+/* トースト通知 */
+.fv-toast {
+  position: fixed; bottom: 30px; left: 50%; transform: translate(-50%, 20px); z-index: 10000;
+  background: var(--nl-bg-card); color: var(--nl-text); padding: 12px 24px; border-radius: 30px;
+  box-shadow: var(--nl-shadow); font-size: 14px; border: 1px solid var(--nl-border); font-family:var(--nl-font);
+  opacity: 0; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none;
+}
+.fv-toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* ═══ v3.0: 共有モーダル ═══ */
+.fv-share-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,0.6); display: flex;
+  align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.2s ease;
+}
+.fv-share-overlay.visible { opacity: 1; }
+.fv-share-modal {
+  background: var(--nl-bg-card); border: 1px solid var(--nl-border);
+  border-radius: 12px; width: 540px; max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  max-height: 85vh; overflow-y: auto;
+}
+.fv-share-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--nl-border);
+}
+.fv-share-header h3 {
+  margin: 0; font-size: 16px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+}
+.fv-share-close {
+  background: none; border: none; color: var(--nl-text-muted);
+  font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
+  transition: background var(--nl-transition);
+}
+.fv-share-close:hover { background: var(--nl-bg-hover); color: var(--nl-text); }
+.fv-share-body { padding: 20px; }
+.fv-share-loading {
+  text-align: center; padding: 30px; color: var(--nl-text-muted);
+}
+.fv-share-info {
+  margin-bottom: 18px; font-size: 14px; color: var(--nl-text-secondary);
+}
+.fv-share-section { margin-bottom: 16px; }
+.fv-share-section label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--nl-text-secondary); margin-bottom: 6px; text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.fv-share-code-row { display: flex; gap: 8px; }
+.fv-share-input {
+  flex: 1; padding: 10px 12px; background: var(--nl-bg-input);
+  border: 1px solid var(--nl-border); border-radius: var(--nl-radius-sm);
+  color: var(--nl-text); font-family: monospace; font-size: 12px;
+  min-width: 0;
+}
+.fv-share-input:focus { outline: none; border-color: var(--nl-primary); }
+.fv-share-copy-btn {
+  padding: 10px 18px; background: var(--nl-primary); color: #fff;
+  border: none; border-radius: var(--nl-radius-sm); cursor: pointer;
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+  transition: background var(--nl-transition); flex-shrink: 0;
+}
+.fv-share-copy-btn:hover { background: var(--nl-primary-hover); }
+.fv-share-hint {
+  font-size: 11px; color: var(--nl-text-muted); margin-top: 4px;
+}
+
+/* 共有ボタン（サイドバー） */
+.btn-share { color: var(--nl-primary) !important; }
+.btn-share:hover { color: var(--nl-primary-hover) !important; }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

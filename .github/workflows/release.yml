@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # コミットメッセージに "Release X.X.X" が含まれている場合のみ実行
+    if: contains(github.event.head_commit.message, 'Release ')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: バージョン番号を抽出
+        id: version
+        run: |
+          VERSION=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'Release \K[0-9]+\.[0-9]+\.[0-9]+')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: 拡張機能 ZIP を作成
+        run: |
+          mkdir -p dist
+          zip -r "dist/NicoList_v${{ steps.version.outputs.version }}.zip" \
+            manifest.json \
+            background.js \
+            content.js \
+            content-youtube.js \
+            content.css \
+            storage.js \
+            popup.html \
+            popup.js \
+            popup.css \
+            fullview.html \
+            fullview.js \
+            fullview.css \
+            shared.html \
+            shared.js \
+            icons/ \
+            LICENSE \
+            README.md
+
+      - name: GitHub Release を作成
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: NicoList v${{ steps.version.outputs.version }}
+          body: |
+            ## NicoList v${{ steps.version.outputs.version }}
+
+            ### インストール方法
+            1. ZIP をダウンロードして展開
+            2. `chrome://extensions` →「デベロッパー モード」を有効化
+            3. 「パッケージ化されていない拡張機能を読み込む」→ 展開したフォルダを選択
+          files: dist/NicoList_v${{ steps.version.outputs.version }}.zip
+          generate_release_notes: true

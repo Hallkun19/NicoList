@@ -145,11 +145,11 @@
           <div style="${descStyle}">リストデータのバックアップとリストアを行います。</div>
           <div style="display:flex;gap:8px;">
             <button id="fv-settings-export" style="${btnStyle}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               エクスポート (JSON)
             </button>
             <label style="${btnStyle}cursor:pointer;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               インポート
               <input type="file" id="fv-settings-import-file" accept=".json" style="display:none;">
             </label>
@@ -165,6 +165,7 @@
 
     // イベントバインド
     document.getElementById('fv-settings-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) overlay.remove(); });
 
     // 保存ボタン
     document.getElementById('fv-settings-save').addEventListener('click', async () => {
@@ -247,11 +248,15 @@
     modal.classList.remove('hidden');
     inputEl.focus();
 
+    const handleOutsideClick = (e) => { if (e.target === modal) close(); };
+    modal.addEventListener('mousedown', handleOutsideClick);
+
     const close = () => {
       modal.classList.add('hidden');
       btnCancel.onclick = null;
       btnSave.onclick = null;
       inputEl.onkeydown = null;
+      modal.removeEventListener('mousedown', handleOutsideClick);
     };
 
     btnCancel.onclick = close;
@@ -804,13 +809,7 @@
 
         // 短いコード（10文字以下）ならクラウドAPI、長ければ旧方式
         if (code.length <= 10) {
-          const res = await chrome.runtime.sendMessage({ action: 'getSharedList', id: code });
-          if (res.success) {
-            const encoded = encodeShareCode(res.data);
-            window.open(chrome.runtime.getURL('shared.html') + '#' + encoded, '_blank');
-          } else {
-            alert('共有コードの読み込みに失敗しました: ' + (res.error || '不明なエラー'));
-          }
+          window.open(chrome.runtime.getURL(`shared.html?c=${code}`), '_blank');
         } else {
           // 旧方式のBase64コード
           window.open(chrome.runtime.getURL('shared.html') + '#' + code, '_blank');

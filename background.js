@@ -146,12 +146,12 @@ async function handleMessage(msg, sender) {
   switch (msg.action) {
     // ─── リスト操作 ─────────────────────────────
     case 'createList': return await createList(msg.name);
-    case 'getAllLists':      return await getAllLists();
-    case 'getList':          return await getList(msg.id);
-    case 'updateListName':   return await updateListName(msg.id, msg.name);
-    case 'updateListShareId':return await updateListShareId(msg.id, msg.shareId);
-    case 'deleteList':       return await deleteList(msg.id);
-    case 'saveListOrder':    return await saveListOrder(msg.order);
+    case 'getAllLists': return await getAllLists();
+    case 'getList': return await getList(msg.id);
+    case 'updateListName': return await updateListName(msg.id, msg.name);
+    case 'updateListShareId': return await updateListShareId(msg.id, msg.shareId);
+    case 'deleteList': return await deleteList(msg.id);
+    case 'saveListOrder': return await saveListOrder(msg.order);
 
     // ─── 動画操作 ─────────────────────────────
     case 'addVideo': return await addVideo(msg.listId, msg.videoInfo);
@@ -748,7 +748,7 @@ async function fetchMylistVideos(mylistId) {
     if (response.ok) {
       const text = await response.text();
       const videoIds = [];
-      const regex = /nicovideo\.jp\/watch\/((?:sm|nm|so)\d+)/g;
+      const regex = /nicovideo\.jp\/watch\/((?:sm|ss|nm|so)\d+)/g;
       let match;
       while ((match = regex.exec(text)) !== null) {
         if (!videoIds.includes(match[1])) videoIds.push(match[1]);
@@ -918,7 +918,7 @@ async function refreshVideos(listId) {
     const chunk = videos.slice(i, i + chunkSize);
     await Promise.all(chunk.map(async (video) => {
       try {
-        const site = video.site || (video.videoId?.startsWith('sm') || video.videoId?.startsWith('nm') ? 'niconico' : 'youtube');
+        const site = video.site || (video.videoId?.startsWith('sm') || video.videoId?.startsWith('ss') || video.videoId?.startsWith('nm') ? 'niconico' : 'youtube');
         const info = await cachedFetchVideoInfo(video.videoId, site, true); // forceRefresh
         if (info && !info.error) {
           // DB内の動画データを更新

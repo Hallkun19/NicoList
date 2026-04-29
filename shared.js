@@ -32,7 +32,7 @@
   function formatDate(ts) {
     if (!ts || ts <= 0) return '-';
     const d = new Date(ts);
-    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
   }
   function buildWatchUrl(vid, site) {
     return site === 'youtube' ? `https://www.youtube.com/watch?v=${vid}` : `https://www.nicovideo.jp/watch/${vid}`;
@@ -61,14 +61,14 @@
 
     let thumbUrl = video.thumbnailUrl;
     let fallbackUrl = '';
-    
+
     // URL未取得時の推測ロジック（ケースA対応）
     if (!thumbUrl) {
       if (video.site === 'youtube') {
         thumbUrl = `https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`;
         fallbackUrl = `https://i.ytimg.com/vi/${video.videoId}/mqdefault.jpg`;
       } else {
-        const numericId = video.videoId.replace(/^sm|nm|so/, '');
+        const numericId = video.videoId.replace(/^sm|ss|nm|so/, '');
         thumbUrl = `https://nicovideo.cdn.nimg.jp/thumbnails/${numericId}/${numericId}.jpg`;
         fallbackUrl = `https://tn.smilevideo.jp/smile?i=${numericId}`;
       }
@@ -77,7 +77,7 @@
       if (video.site === 'youtube') {
         fallbackUrl = `https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`;
       } else {
-        const numericId = video.videoId.replace(/^sm|nm|so/, '');
+        const numericId = video.videoId.replace(/^sm|ss|nm|so/, '');
         fallbackUrl = `https://tn.smilevideo.jp/smile?i=${numericId}`;
       }
     }
@@ -133,7 +133,7 @@
     const container = document.getElementById('fv-videos-container');
     if (!container) return;
     container.innerHTML = '';
-    
+
     const slice = currentSortedData.slice(0, renderLimit);
     slice.forEach((v, i) => container.appendChild(createVideoCard(v, i)));
 
@@ -167,11 +167,11 @@
   function sortVideos(key) {
     const sorted = [...videosData];
     switch (key) {
-      case 'viewCount_desc': sorted.sort((a,b) => (b.viewCount||0) - (a.viewCount||0)); break;
-      case 'viewCount_asc':  sorted.sort((a,b) => (a.viewCount||0) - (b.viewCount||0)); break;
-      case 'postedAt_desc':  sorted.sort((a,b) => (b.postedAt||0) - (a.postedAt||0)); break;
-      case 'postedAt_asc':   sorted.sort((a,b) => (a.postedAt||0) - (b.postedAt||0)); break;
-      case 'likeCount_desc': sorted.sort((a,b) => (b.likeCount||0) - (a.likeCount||0)); break;
+      case 'viewCount_desc': sorted.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)); break;
+      case 'viewCount_asc': sorted.sort((a, b) => (a.viewCount || 0) - (b.viewCount || 0)); break;
+      case 'postedAt_desc': sorted.sort((a, b) => (b.postedAt || 0) - (a.postedAt || 0)); break;
+      case 'postedAt_asc': sorted.sort((a, b) => (a.postedAt || 0) - (b.postedAt || 0)); break;
+      case 'likeCount_desc': sorted.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0)); break;
       default: break; // original order
     }
     renderLimit = 50; // ソート時はリセット
@@ -255,7 +255,7 @@
 
     for (let i = 0; i < entries.length; i += chunkSize) {
       const chunk = entries.slice(i, i + chunkSize);
-      const chunkIndices = Array.from({length: chunk.length}, (_, idx) => i + idx);
+      const chunkIndices = Array.from({ length: chunk.length }, (_, idx) => i + idx);
 
       await Promise.all(chunk.map(async ([vid, siteCode], chunkIdx) => {
         const site = siteCode === 'y' ? 'youtube' : 'niconico';
@@ -279,7 +279,7 @@
               ownerIcon: info.ownerIcon || '',
               description: (info.description || '').slice(0, 300)
             });
-            
+
             // v3等で既に取得済みのより良い投稿者情報があれば復元
             if (!videosData[globalIdx].ownerName && oldOwnerName) videosData[globalIdx].ownerName = oldOwnerName;
             if (!videosData[globalIdx].ownerIcon && oldOwnerIcon) videosData[globalIdx].ownerIcon = oldOwnerIcon;

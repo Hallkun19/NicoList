@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NicoList - 動画リスト拡張",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "ニコニコ動画・YouTubeのマイリスト機能を拡張・強化する Chrome 拡張機能",
   "permissions": [
     "storage",
@@ -16,7 +16,8 @@
     "*://nvapi.nicovideo.jp/*",
     "*://*.youtube.com/*",
     "*://noembed.com/*",
-    "*://*.workers.dev/*"
+    "*://*.workers.dev/*",
+    "https://raw.githubusercontent.com/*"
   ],
   "background": {
     "service_worker": "background.js",

@@ -70,7 +70,7 @@ async function checkForUpdates() {
 chrome.runtime.onStartup.addListener(checkForUpdates);
 chrome.runtime.onInstalled.addListener(() => {
   checkForUpdates();
-  chrome.alarms.create('checkUpdateAlarm', { periodInMinutes: 60 * 24 });
+  chrome.alarms.create('checkUpdateAlarm', { periodInMinutes: 10 });
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'checkUpdateAlarm') checkForUpdates();

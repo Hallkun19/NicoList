@@ -33,7 +33,7 @@
   const titleEl = document.getElementById('fv-current-list-title');
   const countEl = document.getElementById('fv-current-list-count');
   const controlsEl = document.getElementById('fv-controls');
-  
+
   // View Toggle Buttons
   const btnGrid = document.getElementById('btn-view-grid');
   const btnList = document.getElementById('btn-view-list');
@@ -49,14 +49,14 @@
     if (res.updateAvailable) {
       const banner = document.createElement('div');
       banner.className = 'fv-update-banner';
-      
-      const releaseNoteHtml = res.updateAvailable.releaseNote 
+
+      const releaseNoteHtml = res.updateAvailable.releaseNote
         ? `<div style="font-size: 12px; margin-top: 6px; color: var(--nl-text-secondary); line-height: 1.4;">${escapeHtml(res.updateAvailable.releaseNote).replace(/\n/g, '<br>')}</div>`
         : '';
 
       banner.innerHTML = `
         <div style="display:flex; flex-direction:column; flex:1;">
-          <span style="font-weight:bold;">🚀 NicoListの新しいバージョン (v${escapeHtml(res.updateAvailable.version)}) が利用可能です！</span>
+          <span style="font-weight:bold;">NicoListの新しいバージョン (v${escapeHtml(res.updateAvailable.version)}) が利用可能です！</span>
           ${releaseNoteHtml}
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-left:16px;">
@@ -64,7 +64,7 @@
           <button class="fv-update-close" title="閉じる">✕</button>
         </div>
       `;
-      document.querySelector('.fv-layout').prepend(banner);
+      document.body.insertBefore(banner, document.querySelector('.fv-header'));
       banner.querySelector('.fv-update-close').addEventListener('click', () => {
         banner.remove();
         chrome.storage.local.remove('updateAvailable');
@@ -78,7 +78,7 @@
 
   document.getElementById('btn-fv-create-list').addEventListener('click', handleCreateList);
   document.getElementById('input-fv-new-list').addEventListener('keypress', e => { if (e.key === 'Enter') handleCreateList(); });
-  
+
   document.getElementById('fv-select-sort').addEventListener('change', loadVideos);
   document.getElementById('btn-fv-play-cont').addEventListener('click', () => handlePlay(false));
   document.getElementById('btn-fv-play-shuffle').addEventListener('click', () => handlePlay(true));
@@ -220,7 +220,7 @@
         }
         let added = 0;
         for (const v of result.videos) {
-          try { const r = await chrome.runtime.sendMessage({ action: 'addVideo', listId, videoInfo: v }); if (r.success) added++; } catch (e) {}
+          try { const r = await chrome.runtime.sendMessage({ action: 'addVideo', listId, videoInfo: v }); if (r.success) added++; } catch (e) { }
         }
         statusEl.textContent = `${added}/${result.videos.length} 件を取り込みました`; statusEl.style.color = 'var(--nl-success)';
       } catch (e) {
@@ -234,7 +234,7 @@
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `nicolist_backup_${new Date().toISOString().slice(0,10)}.json`;
+      a.href = url; a.download = `nicolist_backup_${new Date().toISOString().slice(0, 10)}.json`;
       a.click(); URL.revokeObjectURL(url);
       showToast('エクスポート完了');
     });
@@ -301,7 +301,7 @@
   function setViewMode(mode) {
     viewMode = mode;
     videosContainer.className = `fv-scrollable ${mode}`;
-    
+
     // UI update
     btnGrid.classList.toggle('active', mode === 'grid');
     btnList.classList.toggle('active', mode === 'list');
@@ -337,7 +337,7 @@
       if (currentListId) {
         const activeItem = listsContainer.querySelector(`[data-id="${currentListId}"]`);
         if (activeItem) activeItem.classList.add('active');
-        else { currentListId = null; videosContainer.innerHTML = ''; titleEl.textContent = 'リストを選択'; countEl.textContent=''; controlsEl.classList.add('hidden'); }
+        else { currentListId = null; videosContainer.innerHTML = ''; titleEl.textContent = 'リストを選択'; countEl.textContent = ''; controlsEl.classList.add('hidden'); }
       }
     } catch (err) {
       listsContainer.innerHTML = `<div class="fv-empty" style="color:var(--nl-danger);">エラー: ${err.message}</div>`;
@@ -348,7 +348,7 @@
     const el = document.createElement('div');
     el.className = 'fv-list-item';
     el.dataset.id = list.id;
-    
+
     el.innerHTML = `
       <div class="fv-list-drag-handle" title="ドラッグして並び替え">${ICONS.drag}</div>
       <div class="fv-list-info">
@@ -426,7 +426,7 @@
       item.addEventListener('dragover', (e) => {
         e.preventDefault(); e.dataTransfer.dropEffect = 'move';
         if (item === draggedItem) return;
-        
+
         const rect = item.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         items.forEach(i => i.classList.remove('drag-over', 'drag-up', 'drag-down'));
@@ -461,7 +461,7 @@
   async function loadVideos() {
     if (!currentListId) return;
     videosContainer.innerHTML = '<div class="fv-loading">読み込み中...</div>';
-    
+
     const sortVal = document.getElementById('fv-select-sort').value;
     const [sortKey, sortOrder] = sortVal.split('_');
 
@@ -480,7 +480,7 @@
       countEl.textContent = `${videos.length}件`;
       controlsEl.classList.remove('hidden');
       videosContainer.innerHTML = '';
-      
+
       // v2.0: 段階ロード（50件ずつ）
       const PAGE_SIZE = 50;
       let loadedCount = 0;
@@ -491,7 +491,7 @@
           videosContainer.appendChild(createVideoCard(videos[i]));
         }
         loadedCount = end;
-        
+
         if (loadedCount < videos.length) {
           let sentinel = document.getElementById('fv-load-more');
           if (!sentinel) {
@@ -501,7 +501,7 @@
             sentinel.textContent = `さらに読み込み中... (${loadedCount}/${videos.length})`;
           }
           videosContainer.appendChild(sentinel);
-          
+
           const observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting) {
               observer.disconnect();
@@ -512,7 +512,7 @@
           observer.observe(sentinel);
         }
       }
-      
+
       loadBatch();
     } catch (err) {
       videosContainer.innerHTML = `<div class="fv-empty" style="color:var(--nl-danger);">エラー: ${err.message}</div>`;
@@ -544,21 +544,21 @@
   function createVideoCard(video) {
     const el = document.createElement('div');
     el.className = 'fv-video-card';
-    
+
     // v2.0: site対応のURL生成
     const watchUrl = video.site === 'youtube'
       ? `https://www.youtube.com/watch?v=${video.videoId}`
       : `https://www.nicovideo.jp/watch/${video.videoId}`;
-    
+
     // v1.4: 投稿日と追加日の分離
     const postedDateStr = new Date(video.postedAt || 0).toLocaleDateString();
     const addedDateStr = new Date(video.addedAt || video.postedAt).toLocaleDateString();
-    
-    
+
+
 
     const ownerAvatar = video.ownerIcon ? `<img src="${escapeHtml(video.ownerIcon)}" alt="owner" class="fv-owner-icon-small">` : '';
     const ownerName = video.ownerName ? `<span class="fv-owner-name-small">${escapeHtml(video.ownerName)}</span>` : '';
-    
+
     el.innerHTML = `
       <a href="${watchUrl}" target="_blank" class="fv-video-thumb">
         ${video.thumbnailUrl ? `<img src="${escapeHtml(video.thumbnailUrl)}" loading="lazy">` : ''}
@@ -745,7 +745,7 @@
     try {
       const videos = await chrome.runtime.sendMessage({ action: 'getVideos', listId });
       const list = await chrome.runtime.sendMessage({ action: 'getList', id: listId });
-      
+
       if (!videos || videos.length === 0) {
         modal.querySelector('.fv-share-body').innerHTML = '<div style="text-align:center;padding:20px;color:var(--nl-text-muted);">リストに動画がありません</div>';
         return;
@@ -796,7 +796,7 @@
       }
 
       const shareId = result.id;
-      
+
       // 新しいIDを発行した場合、次回から同じIDを使うために保存する
       if (!list || list.shareId !== shareId) {
         await chrome.runtime.sendMessage({ action: 'updateListShareId', id: listId, shareId });

@@ -16,7 +16,7 @@
   let cachedNextUrl = null;
 
   function getCurrentVideoId() {
-    const match = location.pathname.match(/\/watch\/((?:sm|nm|so|ca|ax|yo|nl|ig|na|cw|z[a-z]|om|sk|yk)\d+)/i);
+    const match = location.pathname.match(/\/watch\/((?:sm|ss|nm|so|ca|ax|yo|nl|ig|na|cw|z[a-z]|om|sk|yk)\d+)/i);
     return match ? match[1] : null;
   }
 
@@ -45,7 +45,7 @@
     // 1. JSON解析からの取得 (最優先)
     // =========================================================
     const jsonSources = [];
-    
+
     const initDataEl = document.getElementById('js-initial-watch-data');
     if (initDataEl) {
       jsonSources.push(safeParseJSON(initDataEl.textContent.trim()));
@@ -63,12 +63,12 @@
 
       // JSON-LD
       if (data['@type'] === 'VideoObject') {
-         if (!info.title) info.title = data.name || '';
-         if (!info.ownerName) info.ownerName = data.author?.name || '';
-         if (!info.postedAt && data.uploadDate) info.postedAt = new Date(data.uploadDate).getTime();
-         if (!info.thumbnailUrl && data.thumbnailUrl) info.thumbnailUrl = Array.isArray(data.thumbnailUrl) ? data.thumbnailUrl[0] : data.thumbnailUrl;
-         if (!info.description) info.description = data.description || '';
-         continue;
+        if (!info.title) info.title = data.name || '';
+        if (!info.ownerName) info.ownerName = data.author?.name || '';
+        if (!info.postedAt && data.uploadDate) info.postedAt = new Date(data.uploadDate).getTime();
+        if (!info.thumbnailUrl && data.thumbnailUrl) info.thumbnailUrl = Array.isArray(data.thumbnailUrl) ? data.thumbnailUrl[0] : data.thumbnailUrl;
+        if (!info.description) info.description = data.description || '';
+        continue;
       }
 
       // __NEXT_DATA__ / js-initial-watch-data
@@ -79,52 +79,52 @@
       const rvData = window.__reactRouterContext?.loaderData?.[`routes/watch.$videoId`]?.video;
       if (rvData && (rvData.id === videoId || rvData.contentId === videoId)) {
         mainVideoNode = rvData;
-        mainOwnerNode = window.__reactRouterContext?.loaderData?.[`routes/watch.$videoId`]?.owner || 
-                        window.__reactRouterContext?.loaderData?.[`routes/watch.$videoId`]?.channel;
+        mainOwnerNode = window.__reactRouterContext?.loaderData?.[`routes/watch.$videoId`]?.owner ||
+          window.__reactRouterContext?.loaderData?.[`routes/watch.$videoId`]?.channel;
         console.log('NicoList: [NVPC-Direct] ReactRouterContext からデータを特定しました');
       }
 
       // [次点] モダンな Niconico Watch ページ (__NEXT_DATA__)
       const nextProps = data?.props?.pageProps;
-      const iwd = nextProps?.initialWatchData || data?.data?.response; 
+      const iwd = nextProps?.initialWatchData || data?.data?.response;
       const istate = nextProps?.initialState?.video?.watch; // Redux state fallback
 
       if (iwd && iwd.video && (iwd.video.id === videoId || iwd.video.contentId === videoId)) {
-          const v = iwd.video;
-          mainVideoNode = v;
-          mainOwnerNode = iwd.owner || iwd.channel;
-          console.log('NicoList: [JSON-Direct] initialWatchData からデータを特定しました');
+        const v = iwd.video;
+        mainVideoNode = v;
+        mainOwnerNode = iwd.owner || iwd.channel;
+        console.log('NicoList: [JSON-Direct] initialWatchData からデータを特定しました');
       } else if (istate && (istate.id === videoId || istate.videoId === videoId)) {
-          mainVideoNode = istate;
-          mainOwnerNode = istate.owner || istate.channel;
-          console.log('NicoList: [JSON-Direct] initialState からデータを特定しました');
+        mainVideoNode = istate;
+        mainOwnerNode = istate.owner || istate.channel;
+        console.log('NicoList: [JSON-Direct] initialState からデータを特定しました');
       }
 
       function searchId(obj, depth = 0) {
-         if (!obj || typeof obj !== 'object' || depth > 20) return;
-         
-         // 動画ノードの判定
-         if ((obj.id === videoId || obj.videoId === videoId || obj.contentId === videoId) && (obj.count || obj.viewCount || obj.owner)) {
-            if (!mainVideoNode) {
-                mainVideoNode = obj;
-                if (obj.owner && typeof obj.owner === 'object') mainOwnerNode = obj.owner;
-                else if (obj.channel && typeof obj.channel === 'object') mainOwnerNode = obj.channel;
-            }
-         }
-         
-         // いいね数の直接探索 (videoIdノードが見つからない場合のバックアップ)
-         if (obj.count && typeof obj.count === 'object' && obj.count.like !== undefined) {
-             if (info.likeCount === 0) {
-                 // コンテキストが不明な場合は一時保持するが、videoId一致を優先する
-                 // ただし、この階層が videoId と兄弟関係にある可能性を考慮
-             }
-         }
-         
-         for (const key in obj) {
-             if (Object.prototype.hasOwnProperty.call(obj, key) && typeof obj[key] === 'object') {
-                 searchId(obj[key], depth + 1);
-             }
-         }
+        if (!obj || typeof obj !== 'object' || depth > 20) return;
+
+        // 動画ノードの判定
+        if ((obj.id === videoId || obj.videoId === videoId || obj.contentId === videoId) && (obj.count || obj.viewCount || obj.owner)) {
+          if (!mainVideoNode) {
+            mainVideoNode = obj;
+            if (obj.owner && typeof obj.owner === 'object') mainOwnerNode = obj.owner;
+            else if (obj.channel && typeof obj.channel === 'object') mainOwnerNode = obj.channel;
+          }
+        }
+
+        // いいね数の直接探索 (videoIdノードが見つからない場合のバックアップ)
+        if (obj.count && typeof obj.count === 'object' && obj.count.like !== undefined) {
+          if (info.likeCount === 0) {
+            // コンテキストが不明な場合は一時保持するが、videoId一致を優先する
+            // ただし、この階層が videoId と兄弟関係にある可能性を考慮
+          }
+        }
+
+        for (const key in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, key) && typeof obj[key] === 'object') {
+            searchId(obj[key], depth + 1);
+          }
+        }
       }
       if (!mainVideoNode) searchId(data);
 
@@ -132,9 +132,9 @@
         if (!info.title) info.title = mainVideoNode.title || '';
         let vc = mainVideoNode.count?.view ?? mainVideoNode.viewCount; if (vc !== undefined) info.viewCount = vc;
         let mc = mainVideoNode.count?.mylist ?? mainVideoNode.mylistCount; if (mc !== undefined) info.mylistCount = mc;
-        let lc = mainVideoNode.count?.like ?? mainVideoNode.likeCount; 
+        let lc = mainVideoNode.count?.like ?? mainVideoNode.likeCount;
         if (lc !== undefined) {
-             info.likeCount = parseInt(lc, 10) || 0;
+          info.likeCount = parseInt(lc, 10) || 0;
         }
         let reg = mainVideoNode.registeredAt || mainVideoNode.postedAt; if (reg) info.postedAt = new Date(reg).getTime();
         if (!info.thumbnailUrl) info.thumbnailUrl = mainVideoNode.thumbnail?.largeUrl || mainVideoNode.thumbnail?.middleUrl || mainVideoNode.thumbnail?.url || mainVideoNode.thumbnailUrl || '';
@@ -174,168 +174,168 @@
           if (!info.ownerIcon && o.thumbnailUrl) info.ownerIcon = o.thumbnailUrl;
         }
       }
-    } catch(e) { console.warn('NicoList: v3_guest API failed', e); }
+    } catch (e) { console.warn('NicoList: v3_guest API failed', e); }
 
     // =========================================================
     // 1.6. スナップショット検索API (フォールバック)
     // =========================================================
     if (info.likeCount === 0 || !info.title || info.viewCount === 0) {
-        try {
-            const snapUrl = `https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?q=${videoId}&targets=contentId&fields=likeCounter,title,viewCounter,mylistCounter,lengthSeconds&_limit=1`;
-            const snapRes = await fetch(snapUrl);
-            if (snapRes.ok) {
-                const snapJson = await snapRes.json();
-                if (snapJson.data && snapJson.data.length > 0) {
-                    const sn = snapJson.data[0];
-                    if (sn.likeCounter !== undefined && info.likeCount === 0) info.likeCount = sn.likeCounter;
-                    if (sn.viewCounter !== undefined && info.viewCount === 0) info.viewCount = sn.viewCounter;
-                    if (sn.mylistCounter !== undefined && info.mylistCount === 0) info.mylistCount = sn.mylistCounter;
-                    if (sn.title && !info.title) info.title = sn.title;
-                }
-            }
-        } catch(e) { console.warn('NicoList: Snapshot API fallback failed'); }
+      try {
+        const snapUrl = `https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?q=${videoId}&targets=contentId&fields=likeCounter,title,viewCounter,mylistCounter,lengthSeconds&_limit=1`;
+        const snapRes = await fetch(snapUrl);
+        if (snapRes.ok) {
+          const snapJson = await snapRes.json();
+          if (snapJson.data && snapJson.data.length > 0) {
+            const sn = snapJson.data[0];
+            if (sn.likeCounter !== undefined && info.likeCount === 0) info.likeCount = sn.likeCounter;
+            if (sn.viewCounter !== undefined && info.viewCount === 0) info.viewCount = sn.viewCounter;
+            if (sn.mylistCounter !== undefined && info.mylistCount === 0) info.mylistCount = sn.mylistCounter;
+            if (sn.title && !info.title) info.title = sn.title;
+          }
+        }
+      } catch (e) { console.warn('NicoList: Snapshot API fallback failed'); }
     }
 
     // =========================================================
     // 2. DOMからの取得 (JSONやAPIで不足しているものを補完・自身のアイコン排除)
     // =========================================================
     if (!info.ownerIcon) {
-        // 【重要修正】ヘッダーやナビゲーション(自分自身のログインアイコン等)を厳密に排除する
-        const ownerLinks = document.querySelectorAll('a[href^="/user/"], a[href^="/channel/"]');
-        for (const link of Array.from(ownerLinks)) {
-            // ヘッダーやマイページ関連の要素ツリーにあるものはスキップ（viewer排除）
-            if (link.closest('header') || link.closest('nav') || link.closest('#CommonHeader') || link.href.includes('/my/')) continue;
-            
-            const innerImg = link.querySelector('img');
-            if (innerImg && innerImg.src && !innerImg.src.includes('defaults/blank.jpg')) {
-                info.ownerIcon = innerImg.src;
-                console.log('NicoList: [DOM] 動画下部の投稿者リンクからOwnerアイコンを取得成功:', info.ownerIcon);
-                break;
-            }
+      // 【重要修正】ヘッダーやナビゲーション(自分自身のログインアイコン等)を厳密に排除する
+      const ownerLinks = document.querySelectorAll('a[href^="/user/"], a[href^="/channel/"]');
+      for (const link of Array.from(ownerLinks)) {
+        // ヘッダーやマイページ関連の要素ツリーにあるものはスキップ（viewer排除）
+        if (link.closest('header') || link.closest('nav') || link.closest('#CommonHeader') || link.href.includes('/my/')) continue;
+
+        const innerImg = link.querySelector('img');
+        if (innerImg && innerImg.src && !innerImg.src.includes('defaults/blank.jpg')) {
+          info.ownerIcon = innerImg.src;
+          console.log('NicoList: [DOM] 動画下部の投稿者リンクからOwnerアイコンを取得成功:', info.ownerIcon);
+          break;
         }
+      }
     }
     if (!info.title || info.viewCount === 0 || info.likeCount === 0 || !info.ownerName) {
-        console.log('NicoList: JSON情報が不完全なためDOMから補完を実行します', JSON.parse(JSON.stringify(info)));
-        
-        if (!info.title) {
-            const titleMeta = document.querySelector('meta[property="og:title"]');
-            if (titleMeta) info.title = titleMeta.content.replace(/ - ニコニコ動画$/, '').trim();
+      console.log('NicoList: JSON情報が不完全なためDOMから補完を実行します', JSON.parse(JSON.stringify(info)));
+
+      if (!info.title) {
+        const titleMeta = document.querySelector('meta[property="og:title"]');
+        if (titleMeta) info.title = titleMeta.content.replace(/ - ニコニコ動画$/, '').trim();
+      }
+      if (!info.thumbnailUrl || info.thumbnailUrl.includes('blank')) {
+        // OGP meta から取得
+        const imgMeta = document.querySelector('meta[property="og:image"]');
+        if (imgMeta && imgMeta.content && !imgMeta.content.includes('blank')) {
+          info.thumbnailUrl = imgMeta.content;
         }
+        // JSON-LD から取得 (デバイス規制対策フォールバック)
         if (!info.thumbnailUrl || info.thumbnailUrl.includes('blank')) {
-            // OGP meta から取得
-            const imgMeta = document.querySelector('meta[property="og:image"]');
-            if (imgMeta && imgMeta.content && !imgMeta.content.includes('blank')) {
-              info.thumbnailUrl = imgMeta.content;
-            }
-            // JSON-LD から取得 (デバイス規制対策フォールバック)
-            if (!info.thumbnailUrl || info.thumbnailUrl.includes('blank')) {
-              const ldScriptsThumb = document.querySelectorAll('script[type="application/ld+json"]');
-              for (const sc of ldScriptsThumb) {
-                try {
-                  const ld = JSON.parse(sc.textContent.trim());
-                  if (ld.thumbnail && Array.isArray(ld.thumbnail) && ld.thumbnail[0]?.url) {
-                    info.thumbnailUrl = ld.thumbnail[0].url;
-                    break;
-                  }
-                  if (ld.thumbnailUrl) {
-                    info.thumbnailUrl = Array.isArray(ld.thumbnailUrl) ? ld.thumbnailUrl[0] : ld.thumbnailUrl;
-                    break;
-                  }
-                } catch(e) {}
+          const ldScriptsThumb = document.querySelectorAll('script[type="application/ld+json"]');
+          for (const sc of ldScriptsThumb) {
+            try {
+              const ld = JSON.parse(sc.textContent.trim());
+              if (ld.thumbnail && Array.isArray(ld.thumbnail) && ld.thumbnail[0]?.url) {
+                info.thumbnailUrl = ld.thumbnail[0].url;
+                break;
+              }
+              if (ld.thumbnailUrl) {
+                info.thumbnailUrl = Array.isArray(ld.thumbnailUrl) ? ld.thumbnailUrl[0] : ld.thumbnailUrl;
+                break;
+              }
+            } catch (e) { }
+          }
+        }
+      }
+
+      const extractCountByKeyword = (keyword) => {
+        const els = Array.from(document.querySelectorAll('span, div, li'));
+        for (const el of els) {
+          const text = el.textContent;
+          if (text.includes(keyword)) {
+            const match = text.match(new RegExp(`${keyword}\\s*[:：]?\\s*([\\d,]+)(?!\\s*[:：])`));
+            if (match) return parseInt(match[1].replace(/[,，]/g, ''), 10);
+          }
+        }
+        return 0;
+      };
+
+      if (info.viewCount === 0) info.viewCount = extractCountByKeyword('再生');
+      if (info.mylistCount === 0) info.mylistCount = extractCountByKeyword('マイリスト');
+      if (info.likeCount === 0) {
+        console.log('NicoList: JSONおよびAPIすべてでいいね数が0だったため、最終手段としてDOM正規表現を使用します');
+        const likeUI = document.querySelectorAll('[data-title="いいね"], [aria-label*="いいね" i], [data-name*="like" i], button[class*="like" i]');
+        for (const el of Array.from(likeUI)) {
+          const txt = el.textContent || '';
+          if (txt.includes('いいね') || /^[\d,]+$/.test(txt)) {
+            const matched = txt.replace(/,/g, '').match(/\d+/);
+            if (matched) {
+              const num = parseInt(matched[0], 10);
+              if (num > 0 && num < 10000000) {
+                info.likeCount = num;
+                console.log('NicoList: [DOM抽出] テキストからいいね数を取得:', info.likeCount);
+                break;
               }
             }
+          }
         }
+      }
 
-        const extractCountByKeyword = (keyword) => {
-           const els = Array.from(document.querySelectorAll('span, div, li'));
-           for (const el of els) {
-              const text = el.textContent;
-              if (text.includes(keyword)) {
-                 const match = text.match(new RegExp(`${keyword}\\s*[:：]?\\s*([\\d,]+)(?!\\s*[:：])`));
-                 if (match) return parseInt(match[1].replace(/[,，]/g, ''), 10);
-              }
-           }
-           return 0;
-        };
+      if (!info.ownerName) {
+        const ownerLink = document.querySelector('a[class*="VideoOwnerInfo-pageLink"], a[class*="owner-name"], a[href^="/user/"]');
+        if (ownerLink) info.ownerName = ownerLink.textContent.trim();
+      }
 
-        if (info.viewCount === 0) info.viewCount = extractCountByKeyword('再生');
-        if (info.mylistCount === 0) info.mylistCount = extractCountByKeyword('マイリスト');
-        if (info.likeCount === 0) {
-             console.log('NicoList: JSONおよびAPIすべてでいいね数が0だったため、最終手段としてDOM正規表現を使用します');
-             const likeUI = document.querySelectorAll('[data-title="いいね"], [aria-label*="いいね" i], [data-name*="like" i], button[class*="like" i]');
-             for (const el of Array.from(likeUI)) {
-                 const txt = el.textContent || '';
-                 if (txt.includes('いいね') || /^[\d,]+$/.test(txt)) {
-                     const matched = txt.replace(/,/g, '').match(/\d+/);
-                     if (matched) {
-                         const num = parseInt(matched[0], 10);
-                         if (num > 0 && num < 10000000) {
-                             info.likeCount = num;
-                             console.log('NicoList: [DOM抽出] テキストからいいね数を取得:', info.likeCount);
-                             break;
-                         }
-                     }
-                  }
-             }
+      if (!info.duration || info.duration === '0:00') {
+        const timeEl = document.querySelector('.VideoLength, [data-testid="video-length"]');
+        if (timeEl && /^\d{1,2}:\d{2}(:\d{2})?$/.test(timeEl.textContent.trim())) {
+          info.duration = timeEl.textContent.trim();
         }
-
-        if (!info.ownerName) {
-            const ownerLink = document.querySelector('a[class*="VideoOwnerInfo-pageLink"], a[class*="owner-name"], a[href^="/user/"]');
-            if (ownerLink) info.ownerName = ownerLink.textContent.trim();
+      }
+      if (!info.postedAt) {
+        const dateEl = document.querySelector('.VideoUploadDateMeta-dateTime, [data-title="投稿日時"]');
+        if (dateEl) {
+          const parsed = new Date(dateEl.textContent.trim()).getTime();
+          if (!isNaN(parsed) && parsed > 0) info.postedAt = parsed;
         }
-
-        if (!info.duration || info.duration === '0:00') {
-            const timeEl = document.querySelector('.VideoLength, [data-testid="video-length"]');
-            if (timeEl && /^\d{1,2}:\d{2}(:\d{2})?$/.test(timeEl.textContent.trim())) {
-                info.duration = timeEl.textContent.trim();
-            }
-        }
-        if (!info.postedAt) {
-            const dateEl = document.querySelector('.VideoUploadDateMeta-dateTime, [data-title="投稿日時"]');
-            if (dateEl) {
-                const parsed = new Date(dateEl.textContent.trim()).getTime();
-                if (!isNaN(parsed) && parsed > 0) info.postedAt = parsed;
-            }
-        }
+      }
     }
 
     // =========================================================
     // 3. SPA待機処理 (重要なデータが取れない場合は少し待つ)
     // =========================================================
     if (info.likeCount === 0 || !info.title || info.viewCount === 0) {
-        console.log('NicoList: SPAマウント待機リトライを開始します...');
-        info = await new Promise((resolve) => {
-            let attempt = 0;
-            const interval = setInterval(() => {
-                attempt++;
-                if (!info.title) {
-                    const dTitle = document.querySelector('meta[property="og:title"]')?.content.replace(/ - ニコニコ動画$/, '') || document.title.replace(/ - ニコニコ動画$/, '');
-                    if (dTitle && dTitle !== videoId) info.title = dTitle;
-                }
-                if (info.likeCount === 0) {
-                   const likeBtn = document.querySelector('button[aria-label="いいね"], button[data-title="いいね"], [data-testid="like-button"]');
-                   if (likeBtn) {
-                      const m = likeBtn.textContent.match(/([\d,]+)/);
-                      if (m) info.likeCount = parseInt(m[1].replace(/,/g, ''), 10);
-                   }
-                }
-                if (info.viewCount === 0) {
-                   const els = Array.from(document.querySelectorAll('span, div'));
-                   for (const el of els) {
-                      if (el.textContent.includes('再生')) {
-                         const match = el.textContent.match(/再生\s*[:：]?\s*([\d,]+)(?!\s*[:：])/);
-                         if (match) info.viewCount = parseInt(match[1].replace(/[,，]/g, ''), 10);
-                         break;
-                      }
-                   }
-                }
-                
-                if ((info.title && info.likeCount > 0 && info.viewCount > 0) || attempt >= 10) {
-                    clearInterval(interval);
-                    resolve(info);
-                }
-            }, 200); // 200ms × 10 = 最大2秒待機
-        });
+      console.log('NicoList: SPAマウント待機リトライを開始します...');
+      info = await new Promise((resolve) => {
+        let attempt = 0;
+        const interval = setInterval(() => {
+          attempt++;
+          if (!info.title) {
+            const dTitle = document.querySelector('meta[property="og:title"]')?.content.replace(/ - ニコニコ動画$/, '') || document.title.replace(/ - ニコニコ動画$/, '');
+            if (dTitle && dTitle !== videoId) info.title = dTitle;
+          }
+          if (info.likeCount === 0) {
+            const likeBtn = document.querySelector('button[aria-label="いいね"], button[data-title="いいね"], [data-testid="like-button"]');
+            if (likeBtn) {
+              const m = likeBtn.textContent.match(/([\d,]+)/);
+              if (m) info.likeCount = parseInt(m[1].replace(/,/g, ''), 10);
+            }
+          }
+          if (info.viewCount === 0) {
+            const els = Array.from(document.querySelectorAll('span, div'));
+            for (const el of els) {
+              if (el.textContent.includes('再生')) {
+                const match = el.textContent.match(/再生\s*[:：]?\s*([\d,]+)(?!\s*[:：])/);
+                if (match) info.viewCount = parseInt(match[1].replace(/[,，]/g, ''), 10);
+                break;
+              }
+            }
+          }
+
+          if ((info.title && info.likeCount > 0 && info.viewCount > 0) || attempt >= 10) {
+            clearInterval(interval);
+            resolve(info);
+          }
+        }, 200); // 200ms × 10 = 最大2秒待機
+      });
     }
 
     // =========================================================
@@ -344,24 +344,24 @@
     if (!info.title || info.title.trim() === '') info.title = document.title.replace(/ - ニコニコ動画$/, '').trim() || videoId;
     if (!info.ownerName) info.ownerName = '不明なユーザー';
     if (!info.ownerIcon) info.ownerIcon = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg';
-    if (!info.postedAt || isNaN(info.postedAt)) info.postedAt = 0; 
+    if (!info.postedAt || isNaN(info.postedAt)) info.postedAt = 0;
 
     // サムネイルURLの高画質化・統一化
     if (info.thumbnailUrl) {
-        // ニコニコCDNの旧形式サムネイルのみ .L 変換を適用
-        if (info.thumbnailUrl.includes('nicovideo.cdn.nimg.jp/thumbnails/')) {
-            if (!info.thumbnailUrl.includes('.L')) {
-                // サイズサフィックス (.M, .S, .S2 等) があれば .L に置換
-                const sizeReplaced = info.thumbnailUrl.replace(/\.[A-Z]\d?(\?.*)?$/, '.L$1');
-                if (sizeReplaced !== info.thumbnailUrl) {
-                    info.thumbnailUrl = sizeReplaced;
-                } else {
-                    // サイズサフィックスなし (例: 123.456789) → .L を末尾に追加
-                    info.thumbnailUrl = info.thumbnailUrl.replace(/(\?.*)?$/, '.L$1');
-                }
-            }
+      // ニコニコCDNの旧形式サムネイルのみ .L 変換を適用
+      if (info.thumbnailUrl.includes('nicovideo.cdn.nimg.jp/thumbnails/')) {
+        if (!info.thumbnailUrl.includes('.L')) {
+          // サイズサフィックス (.M, .S, .S2 等) があれば .L に置換
+          const sizeReplaced = info.thumbnailUrl.replace(/\.[A-Z]\d?(\?.*)?$/, '.L$1');
+          if (sizeReplaced !== info.thumbnailUrl) {
+            info.thumbnailUrl = sizeReplaced;
+          } else {
+            // サイズサフィックスなし (例: 123.456789) → .L を末尾に追加
+            info.thumbnailUrl = info.thumbnailUrl.replace(/(\?.*)?$/, '.L$1');
+          }
         }
-        // img.cdn.nimg.jp の新形式はそのまま使用
+      }
+      // img.cdn.nimg.jp の新形式はそのまま使用
     }
 
     console.log('NicoList: 最終データマッピング完了', info);
@@ -396,7 +396,7 @@
   function createAddButtonWithObserver() {
     if (buttonObserver) buttonObserver.disconnect();
     if (insertionInterval) clearInterval(insertionInterval);
-    
+
     const tryInsert = () => {
       // 既に挿入済みの場合は成功とする
       if (document.getElementById('nicolist-add-btn')) return true;
@@ -418,7 +418,7 @@
       // 案2: 投稿者アイコンの右隣に統合
       let ownerNameEl = document.querySelector('.VideoOwnerInfo-pageLink, .owner-name, [data-testid="owner-name"]');
       if (ownerNameEl && ownerNameEl.parentElement) {
-         ownerNameEl.parentElement.insertAdjacentHTML("beforeend", `
+        ownerNameEl.parentElement.insertAdjacentHTML("beforeend", `
           <button id="nicolist-add-btn" class="nicolist-inline-owner-btn" style="margin-left: 10px;" title="NicoList に追加">
             ${ICONS.plus} リスト
           </button>
@@ -434,7 +434,7 @@
       insertionInterval = setInterval(() => {
         if (tryInsert()) {
           clearInterval(insertionInterval);
-          observeContainerRemovals(); 
+          observeContainerRemovals();
         }
       }, 100);
     } else {
@@ -535,13 +535,13 @@
     `;
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
-    
+
     document.getElementById('nicolist-modal-close').addEventListener('click', closeModal);
     document.getElementById('nicolist-new-list-btn').addEventListener('click', createNewListFromModal);
     document.getElementById('nicolist-new-list-input').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') createNewListFromModal();
     });
-    
+
     loadListsInModal();
     requestAnimationFrame(() => overlay.classList.add('nicolist-modal-visible'));
   }
@@ -608,7 +608,7 @@
       }
 
       const result = await chrome.runtime.sendMessage({ action: 'addVideo', listId, videoInfo });
-      
+
       if (result.success) {
         // v2.0: 最後に使用したリストを記憶（ダブルクリック即追加用）
         await chrome.storage.local.set({ lastUsedListId: listId });
@@ -647,7 +647,7 @@
     const toast = document.createElement('div');
     toast.className = `nicolist-toast nicolist-toast-${type}`;
     toast.innerHTML = `<span style="display:flex;align-items:center;gap:8px;">
-      ${type==='success'?ICONS.check:(type==='error'?ICONS.cross:ICONS.list)}
+      ${type === 'success' ? ICONS.check : (type === 'error' ? ICONS.cross : ICONS.list)}
       ${escapeHtml(message)}
     </span>`;
     document.body.appendChild(toast);
@@ -758,7 +758,7 @@
   }
 
   async function syncPlaybackIndex() {
-    if(!playbackState) return;
+    if (!playbackState) return;
     const currentVideoId = getCurrentVideoId();
     if (playbackState.queue[playbackState.currentIndex]?.videoId !== currentVideoId) {
       // 実際開いている動画を探す
@@ -945,22 +945,22 @@
   // ═════════════════════════════════════════════════════════
   function init() {
     if (!getCurrentVideoId()) return;
-    
+
     createAddButtonWithObserver();
     setupPlaybackDetection();
-    
+
     let lastUrl = location.href;
     const urlObserver = new MutationObserver(() => {
       if (location.href !== lastUrl) {
         lastUrl = location.href;
-        
+
         // クリーンアップ
         document.getElementById('nicolist-add-btn')?.remove();
         if (buttonObserver) buttonObserver.disconnect();
         if (insertionInterval) clearInterval(insertionInterval);
         if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
         if (loopObserver) { loopObserver.disconnect(); loopObserver = null; }
-        
+
         if (getCurrentVideoId()) {
           createAddButtonWithObserver();
           setupPlaybackDetection();

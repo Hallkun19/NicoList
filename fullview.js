@@ -59,6 +59,17 @@
   document.getElementById('btn-fv-play-shuffle').addEventListener('click', () => handlePlay(true));
   document.getElementById('btn-fv-refresh').addEventListener('click', handleRefreshVideos);
 
+  document.getElementById('btn-fv-load-code').addEventListener('click', () => {
+    showFvTextInputModal('共有コードを読み込む', '', '6桁のコードを入力', (val) => {
+      if (!val || val.length !== 6) {
+        showToast('無効なコードです');
+        return;
+      }
+      const url = chrome.runtime.getURL(`shared.html?c=${val}`);
+      window.open(url, '_blank');
+    });
+  });
+
   document.getElementById('btn-fv-export').addEventListener('click', handleExport);
   document.getElementById('input-fv-import').addEventListener('change', handleImport);
   document.getElementById('btn-fv-settings').addEventListener('click', openSettingsPanel);
@@ -703,38 +714,73 @@
 
     try {
       const videos = await chrome.runtime.sendMessage({ action: 'getVideos', listId });
+      const list = await chrome.runtime.sendMessage({ action: 'getList', id: listId });
+      
       if (!videos || videos.length === 0) {
         modal.querySelector('.fv-share-body').innerHTML = '<div style="text-align:center;padding:20px;color:var(--nl-text-muted);">リストに動画がありません</div>';
         return;
       }
 
-      // v2最小化: videoId + site のみ
+      // クラウド共有用データ（v3: メモ・投稿者情報含む完全版）
       const shareData = {
-        v: 2,
+        v: 3,
         n: listName,
-        d: videos.map(v => [v.videoId, v.site === 'youtube' ? 'y' : 'n'])
+        d: videos.map(v => {
+          const entry = { id: v.videoId, s: v.site === 'youtube' ? 'y' : 'n' };
+          if (v.memo) entry.m = v.memo;
+          if (v.ownerName) entry.on = v.ownerName;
+          if (v.ownerIcon) entry.oi = v.ownerIcon;
+          return entry;
+        })
       };
 
-      const shareCode = encodeShareCode(shareData);
-      const shareUrl = chrome.runtime.getURL('shared.html') + '#' + shareCode;
+      // 既に共有IDを持っていれば上書き更新用に追加
+      if (list && list.shareId) {
+        shareData.i = list.shareId;
+      }
+
+      // クラウドAPIに送信
+      modal.querySelector('.fv-share-body').innerHTML = '<div class="fv-share-loading">クラウドにアップロード中...</div>';
+      const result = await chrome.runtime.sendMessage({ action: 'createShareLink', data: shareData });
+
+      if (!result.success) {
+        // クラウド失敗時は旧方式にフォールバック
+        const fallbackData = { v: 2, n: listName, d: videos.map(v => [v.videoId, v.site === 'youtube' ? 'y' : 'n']) };
+        const fallbackCode = encodeShareCode(fallbackData);
+        modal.querySelector('.fv-share-body').innerHTML = `
+          <div style="padding:12px;color:var(--nl-warning);font-size:12px;">⚠ クラウド共有に失敗しました（${escapeHtml(result.error || '不明なエラー')}）。旧方式のコードを生成しました（メモは含まれません）。</div>
+          <div class="fv-share-section">
+            <label>共有コード（旧方式）</label>
+            <div class="fv-share-code-row">
+              <input type="text" class="fv-share-input" id="fv-share-code" value="${fallbackCode}" readonly>
+              <button class="fv-share-copy-btn" id="btn-copy-code">コピー</button>
+            </div>
+          </div>
+        `;
+        document.getElementById('btn-copy-code').addEventListener('click', async () => {
+          await navigator.clipboard.writeText(fallbackCode);
+          const b = document.getElementById('btn-copy-code');
+          b.textContent = '✓ コピー済'; setTimeout(() => { b.textContent = 'コピー'; }, 2000);
+        });
+        return;
+      }
+
+      const shareId = result.id;
+      
+      // 新しいIDを発行した場合、次回から同じIDを使うために保存する
+      if (!list || list.shareId !== shareId) {
+        await chrome.runtime.sendMessage({ action: 'updateListShareId', id: listId, shareId });
+      }
 
       modal.querySelector('.fv-share-body').innerHTML = `
         <div class="fv-share-info"><strong>${escapeHtml(listName)}</strong> — ${videos.length}本の動画</div>
         <div class="fv-share-section">
           <label>共有コード</label>
           <div class="fv-share-code-row">
-            <input type="text" class="fv-share-input" id="fv-share-code" value="${shareCode}" readonly>
+            <input type="text" class="fv-share-input" id="fv-share-code" value="${shareId}" readonly style="font-size:18px;text-align:center;letter-spacing:2px;font-weight:bold;">
             <button class="fv-share-copy-btn" id="btn-copy-code">コピー</button>
           </div>
-          <div class="fv-share-hint">テキストとして送信できます（LINE, Discord等）</div>
-        </div>
-        <div class="fv-share-section">
-          <label>共有URL</label>
-          <div class="fv-share-code-row">
-            <input type="text" class="fv-share-input" id="fv-share-url" value="${shareUrl}" readonly>
-            <button class="fv-share-copy-btn" id="btn-copy-url">コピー</button>
-          </div>
-          <div class="fv-share-hint">NicoListがインストールされた相手はURLを開くだけで閲覧できます</div>
+          <div class="fv-share-hint">この短いコードを相手に送ってください（有効期限: 30日）</div>
         </div>
         <div class="fv-share-section" style="border-top:1px solid var(--nl-border);padding-top:14px;margin-top:6px;">
           <label>共有コードを読み込む</label>
@@ -746,19 +792,30 @@
       `;
 
       document.getElementById('btn-copy-code').addEventListener('click', async () => {
-        await navigator.clipboard.writeText(shareCode);
+        await navigator.clipboard.writeText(shareId);
         const b = document.getElementById('btn-copy-code');
         b.textContent = '✓ コピー済'; setTimeout(() => { b.textContent = 'コピー'; }, 2000);
       });
-      document.getElementById('btn-copy-url').addEventListener('click', async () => {
-        await navigator.clipboard.writeText(shareUrl);
-        const b = document.getElementById('btn-copy-url');
-        b.textContent = '✓ コピー済'; setTimeout(() => { b.textContent = 'コピー'; }, 2000);
-      });
-      document.getElementById('btn-load-paste').addEventListener('click', () => {
+      document.getElementById('btn-load-paste').addEventListener('click', async () => {
         const code = document.getElementById('fv-share-paste').value.trim();
         if (!code) return;
-        window.open(chrome.runtime.getURL('shared.html') + '#' + code, '_blank');
+        const btn = document.getElementById('btn-load-paste');
+        btn.textContent = '読込中...'; btn.disabled = true;
+
+        // 短いコード（10文字以下）ならクラウドAPI、長ければ旧方式
+        if (code.length <= 10) {
+          const res = await chrome.runtime.sendMessage({ action: 'getSharedList', id: code });
+          if (res.success) {
+            const encoded = encodeShareCode(res.data);
+            window.open(chrome.runtime.getURL('shared.html') + '#' + encoded, '_blank');
+          } else {
+            alert('共有コードの読み込みに失敗しました: ' + (res.error || '不明なエラー'));
+          }
+        } else {
+          // 旧方式のBase64コード
+          window.open(chrome.runtime.getURL('shared.html') + '#' + code, '_blank');
+        }
+        btn.textContent = '開く'; btn.disabled = false;
       });
     } catch (err) {
       modal.querySelector('.fv-share-body').innerHTML = `<div style="text-align:center;padding:20px;color:var(--nl-danger);">エラー: ${escapeHtml(err.message)}</div>`;
@@ -766,5 +823,3 @@
   }
 
 })();
-
-

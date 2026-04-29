@@ -13,3 +13,7 @@ dist/
 
 # Node (future)
 node_modules/
+
+# Cloudflare Worker
+worker/node_modules/
+worker/.wrangler/

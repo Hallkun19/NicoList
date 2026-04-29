@@ -76,7 +76,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         await chrome.storage.local.remove(keysToRemove);
         console.log(`NicoList: キャッシュクリア完了 (${keysToRemove.length}件)`);
       }
-    } catch(e) { console.warn('NicoList: キャッシュクリア失敗', e); }
+    } catch (e) { console.warn('NicoList: キャッシュクリア失敗', e); }
   }
 });
 
@@ -88,7 +88,7 @@ async function getCachedVideoInfo(videoId) {
     if (entry && entry.cachedAt && entry.cacheVer === CACHE_VERSION && (Date.now() - entry.cachedAt < CACHE_TTL)) {
       return entry;
     }
-  } catch(e) {}
+  } catch (e) { }
   return null;
 }
 
@@ -98,7 +98,7 @@ async function setCachedVideoInfo(videoId, info) {
     // キャッシュサイズ削減: description は除外（共有リスト表示時に再取得）
     const { description, ...cacheData } = info;
     await chrome.storage.local.set({ [key]: { ...cacheData, cachedAt: Date.now(), cacheVer: CACHE_VERSION } });
-  } catch(e) {
+  } catch (e) {
     console.warn('NicoList: キャッシュ書き込み失敗', videoId, e.message);
   }
 }
@@ -130,7 +130,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
         console.log('NicoList BG: タブ閉じにより連続再生を停止 (tabId:', tabId, ')');
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 });
 
 // ─── メッセージハンドラ ───────────────────────────────────
@@ -145,38 +145,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleMessage(msg, sender) {
   switch (msg.action) {
     // ─── リスト操作 ─────────────────────────────
-    case 'createList':       return await createList(msg.name);
+    case 'createList': return await createList(msg.name);
     case 'getAllLists':      return await getAllLists();
     case 'getList':          return await getList(msg.id);
     case 'updateListName':   return await updateListName(msg.id, msg.name);
+    case 'updateListShareId':return await updateListShareId(msg.id, msg.shareId);
     case 'deleteList':       return await deleteList(msg.id);
     case 'saveListOrder':    return await saveListOrder(msg.order);
 
     // ─── 動画操作 ─────────────────────────────
-    case 'addVideo':         return await addVideo(msg.listId, msg.videoInfo);
-    case 'getVideos':        return await getVideos(msg.listId, msg.sortKey, msg.sortOrder);
-    case 'getVideoCount':    return await getVideoCount(msg.listId);
-    case 'removeVideo':      return await removeVideo(msg.videoDbId);
-    case 'updateVideoMemo':  return await updateVideoMemo(msg.videoDbId, msg.memo);
-    case 'isVideoInList':    return await isVideoInList(msg.listId, msg.videoId);
+    case 'addVideo': return await addVideo(msg.listId, msg.videoInfo);
+    case 'getVideos': return await getVideos(msg.listId, msg.sortKey, msg.sortOrder);
+    case 'getVideoCount': return await getVideoCount(msg.listId);
+    case 'removeVideo': return await removeVideo(msg.videoDbId);
+    case 'updateVideoMemo': return await updateVideoMemo(msg.videoDbId, msg.memo);
+    case 'isVideoInList': return await isVideoInList(msg.listId, msg.videoId);
 
     // ─── 連続再生 ─────────────────────────────
-    case 'startPlayback':    return await startPlayback(msg.listId, msg.sortKey, msg.sortOrder, msg.shuffle, msg.startIndex);
+    case 'startPlayback': return await startPlayback(msg.listId, msg.sortKey, msg.sortOrder, msg.shuffle, msg.startIndex);
     case 'getPlaybackState': return await getPlaybackState();
-    case 'playNext':         return await playNext();
-    case 'stopPlayback':     return await stopPlayback();
-    case 'jumpToPlayback':   return await jumpToPlayback(msg.index);
+    case 'playNext': return await playNext();
+    case 'stopPlayback': return await stopPlayback();
+    case 'jumpToPlayback': return await jumpToPlayback(msg.index);
 
     // ─── インポート / エクスポート ───────────────
-    case 'exportAll':        return await exportAll();
-    case 'importData':       return await importData(msg.data, msg.overwrite);
+    case 'exportAll': return await exportAll();
+    case 'importData': return await importData(msg.data, msg.overwrite);
 
     // ─── 動画情報取得（API） ────────────────────
-    case 'fetchVideoInfo':   return await cachedFetchVideoInfo(msg.videoId, 'niconico', msg.forceRefresh);
+    case 'fetchVideoInfo': return await cachedFetchVideoInfo(msg.videoId, 'niconico', msg.forceRefresh);
     case 'fetchYouTubeVideoInfo': return await cachedFetchVideoInfo(msg.videoId, 'youtube', msg.forceRefresh);
 
     // ─── リスト内動画の情報一括更新 ───────────────
-    case 'refreshVideos':    return await refreshVideos(msg.listId);
+    case 'refreshVideos': return await refreshVideos(msg.listId);
 
     // ─── マイリスト取得（CORS回避のためBG経由） ──
     case 'fetchMylistVideos': return await fetchMylistVideos(msg.mylistId);
@@ -192,6 +193,12 @@ async function handleMessage(msg, sender) {
     case 'openFullView':
       await chrome.tabs.create({ url: chrome.runtime.getURL('fullview.html') });
       return { success: true };
+
+    // ─── クラウド共有 ─────────────────────────
+    case 'createShareLink':
+      return await createShareLink(msg.data);
+    case 'getSharedList':
+      return await getSharedList(msg.id);
 
     default:
       return { error: '不明なアクション: ' + msg.action };
@@ -274,6 +281,23 @@ async function updateListName(id, newName) {
     };
     tx.oncomplete = () => resolve({ success: true });
     tx.onerror = () => reject(new Error('リスト更新失敗'));
+  });
+}
+
+async function updateListShareId(id, shareId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('lists', 'readwrite');
+    const store = tx.objectStore('lists');
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const list = getReq.result;
+      if (!list) return reject(new Error('見つかりません'));
+      list.shareId = shareId;
+      store.put(list);
+    };
+    tx.oncomplete = () => resolve({ success: true });
+    tx.onerror = () => reject(new Error('リスト共有ID更新失敗'));
   });
 }
 
@@ -503,7 +527,7 @@ async function playNext() {
 
   state.currentIndex = nextIndex;
   await chrome.storage.local.set({ playbackState: state });
-  
+
   const next = state.queue[nextIndex];
   return { success: true, nextUrl: buildWatchUrl(next.videoId, next.site), currentIndex: nextIndex, total: state.queue.length };
 }
@@ -692,7 +716,7 @@ async function fetchMylistVideos(mylistId) {
       const json = await response.json();
       const items = json.data?.mylist?.items || json.data?.items || [];
       if (items.length === 0) break;
-      
+
       const videos = items.map(item => {
         const v = item.video || item;
         const icon = v.owner?.iconUrl || v.owner?.thumbnailUrl || v.channel?.iconUrl || v.channel?.thumbnailUrl
@@ -757,7 +781,7 @@ async function fetchYouTubeVideoInfo(videoId) {
       const html = await response.text();
       // 複数パターンで ytInitialPlayerResponse を取得
       const match = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});\s*(?:var\s|const\s|let\s|<)/) ||
-                    html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
+        html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
       if (match) {
         const data = JSON.parse(match[1]);
         const v = data.videoDetails;
@@ -839,7 +863,7 @@ async function fetchYouTubeVideoInfo(videoId) {
               site: 'youtube'
             };
           }
-        } catch(e) {}
+        } catch (e) { }
       }
     }
   } catch (e) {
@@ -915,10 +939,57 @@ async function refreshVideos(listId) {
             updated++;
           }
         }
-      } catch(e) { console.warn('NicoList: refreshVideos error', video.videoId, e); }
+      } catch (e) { console.warn('NicoList: refreshVideos error', video.videoId, e); }
     }));
     // API負荷軽減
     if (i + chunkSize < videos.length) await new Promise(r => setTimeout(r, 300));
   }
   return { success: true, updated, total: videos.length };
+}
+
+// ═════════════════════════════════════════════════════════════
+//  クラウド共有（Cloudflare D1 バックエンド）
+// ═════════════════════════════════════════════════════════════
+
+const SHARE_API_BASE = 'https://nicolist-share-api.halkun19.workers.dev';
+
+async function createShareLink(data) {
+  try {
+    const body = JSON.stringify(data);
+    if (body.length > 500000) {
+      return { success: false, error: 'データサイズが大きすぎます（500KB制限）' };
+    }
+    const res = await fetch(`${SHARE_API_BASE}/api/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const json = await res.json();
+    return { success: true, id: json.id };
+  } catch (e) {
+    console.error('NicoList: クラウド共有リンク作成失敗', e);
+    return { success: false, error: e.message };
+  }
+}
+
+async function getSharedList(id) {
+  try {
+    if (!id || id.length > 10) {
+      return { success: false, error: '無効な共有コードです' };
+    }
+    const res = await fetch(`${SHARE_API_BASE}/api/share/${encodeURIComponent(id)}`);
+    if (res.status === 404) {
+      return { success: false, error: '共有コードが見つかりません（期限切れの可能性があります）' };
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return { success: true, data };
+  } catch (e) {
+    console.error('NicoList: クラウド共有リスト取得失敗', e);
+    return { success: false, error: e.message };
+  }
 }

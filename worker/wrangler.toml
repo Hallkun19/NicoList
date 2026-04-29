@@ -1,0 +1,13 @@
+name = "nicolist-share-api"
+main = "src/index.js"
+compatibility_date = "2024-04-05"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "nicolist-db"
+database_id = "2e6a6c94-1d17-4f1f-b372-b7e988189b23"
+
+# Cron trigger for deleting old data (runs once a day)
+[triggers]
+crons = ["0 0 * * *"]

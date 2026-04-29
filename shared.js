@@ -53,10 +53,6 @@
   function createVideoCard(video, index) {
     const url = buildWatchUrl(video.videoId, video.site);
     const postedDateStr = video.postedAt ? formatDate(video.postedAt) : '-';
-    const ownerName = video.ownerName ? escapeHtml(video.ownerName) : '';
-    const ownerAvatar = video.ownerIcon
-      ? `<img src="${escapeHtml(video.ownerIcon)}" style="width:20px;height:20px;border-radius:50%;margin-right:4px;">`
-      : '';
 
     const el = document.createElement('div');
     el.className = 'fv-video-card';
@@ -86,6 +82,9 @@
       }
     }
 
+    const ownerAvatar = video.ownerIcon ? `<img src="${escapeHtml(video.ownerIcon)}" alt="owner" class="fv-owner-icon-small">` : '';
+    const ownerName = video.ownerName ? `<span class="fv-owner-name-small">${escapeHtml(video.ownerName)}</span>` : '';
+
     el.innerHTML = `
       <a href="${url}" target="_blank" class="fv-video-thumb">
         <img src="${escapeHtml(thumbUrl)}" loading="lazy" onerror="this.onerror=null; this.src='${escapeHtml(fallbackUrl)}';">
@@ -93,7 +92,9 @@
       <div class="fv-video-info">
         <a href="${url}" target="_blank" class="fv-video-title">${escapeHtml(video.title || video.videoId)}</a>
         <div class="fv-video-posted-date">${postedDateStr}</div>
-        ${ownerName ? `<div class="fv-video-owner-area">${ownerAvatar}${ownerName}</div>` : ''}
+        
+        ${video.ownerName ? `<div class="fv-video-owner-area">${ownerAvatar}${ownerName}</div>` : ''}
+        
         <div class="fv-video-stats-row">
           <div class="fv-video-stats">
             <span title="再生数">${ICONS.view} ${formatCount(video.viewCount)}</span>
@@ -101,9 +102,16 @@
             ${video.mylistCount >= 0 ? `<span title="マイリスト数">${ICONS.mylist} ${formatCount(video.mylistCount)}</span>` : ''}
           </div>
         </div>
+        
+        ${video.memo ? `<div class="fv-video-memo">${escapeHtml(video.memo)}</div>` : ''}
         <div class="fv-video-desc">${escapeHtml(video.description || '')}</div>
       </div>
     `;
+
+    el.querySelector('.fv-video-memo')?.addEventListener('click', (e) => {
+      e.target.classList.toggle('expanded');
+    });
+
     return el;
   }
 
@@ -205,19 +213,35 @@
     document.getElementById('btn-view-list').addEventListener('click', () => setViewMode('list'));
     document.getElementById('shared-sort').addEventListener('change', (e) => sortVideos(e.target.value));
 
+    // entries は v2形式 [[vid, siteCode], ...] か v3形式 [{id, s, m?}, ...] のどちらか
+    const isV3 = entries.length > 0 && typeof entries[0] === 'object' && !Array.isArray(entries[0]);
+
     // 初期表示: プレースホルダーカード
-    videosData = entries.map(([vid, siteCode]) => ({
-      videoId: vid,
-      site: siteCode === 'y' ? 'youtube' : 'niconico',
-      title: vid,
-      thumbnailUrl: siteCode === 'y' ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : '',
-      viewCount: 0, likeCount: 0, mylistCount: siteCode === 'y' ? -1 : 0,
-      postedAt: 0, ownerName: '', ownerIcon: '', description: ''
-    }));
+    if (isV3) {
+      videosData = entries.map(e => ({
+        videoId: e.id,
+        site: e.s === 'y' ? 'youtube' : 'niconico',
+        title: e.id,
+        thumbnailUrl: e.s === 'y' ? `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg` : '',
+        viewCount: 0, likeCount: 0, mylistCount: e.s === 'y' ? -1 : 0,
+        postedAt: 0, ownerName: e.on || '', ownerIcon: e.oi || '', description: '',
+        memo: e.m || ''
+      }));
+    } else {
+      videosData = entries.map(([vid, siteCode]) => ({
+        videoId: vid,
+        site: siteCode === 'y' ? 'youtube' : 'niconico',
+        title: vid,
+        thumbnailUrl: siteCode === 'y' ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : '',
+        viewCount: 0, likeCount: 0, mylistCount: siteCode === 'y' ? -1 : 0,
+        postedAt: 0, ownerName: '', ownerIcon: '', description: ''
+      }));
+    }
     renderVideos(videosData);
 
     // プログレッシブ情報取得
-    fetchAllVideoInfo(entries);
+    const fetchEntries = isV3 ? entries.map(e => [e.id, e.s]) : entries;
+    fetchAllVideoInfo(fetchEntries);
 
     // インポートボタン
     document.getElementById('btn-import-all').addEventListener('click', () => importToMyList(listName));
@@ -241,6 +265,9 @@
         try {
           const info = await chrome.runtime.sendMessage({ action, videoId: vid });
           if (info && !info.error) {
+            const oldOwnerName = videosData[globalIdx].ownerName;
+            const oldOwnerIcon = videosData[globalIdx].ownerIcon;
+
             Object.assign(videosData[globalIdx], {
               title: info.title || vid,
               thumbnailUrl: info.thumbnailUrl || videosData[globalIdx].thumbnailUrl,
@@ -253,6 +280,10 @@
               description: (info.description || '').slice(0, 300)
             });
             
+            // v3等で既に取得済みのより良い投稿者情報があれば復元
+            if (!videosData[globalIdx].ownerName && oldOwnerName) videosData[globalIdx].ownerName = oldOwnerName;
+            if (!videosData[globalIdx].ownerIcon && oldOwnerIcon) videosData[globalIdx].ownerIcon = oldOwnerIcon;
+
             // 描画済みならDOMだけ更新
             updateCardInDOM(videosData[globalIdx]);
           }
@@ -307,6 +338,7 @@
               ownerIcon: v.ownerIcon || '',
               description: v.description || '',
               site: v.site || 'niconico',
+              memo: v.memo || '',
               addedAt: baseTime + (videosData.length - i)  // ★ 先頭が最大値 → addedAt_desc で元順序維持
             }
           });
@@ -336,9 +368,29 @@
         </div>
       </div>
     `;
-    document.getElementById('btn-load-code').addEventListener('click', () => {
+    document.getElementById('btn-load-code').addEventListener('click', async () => {
       const code = document.getElementById('share-code-input').value.trim();
       if (!code) return;
+      const btn = document.getElementById('btn-load-code');
+
+      // 短いコード（10文字以下）ならクラウドAPIから取得
+      if (code.length <= 10) {
+        btn.textContent = '読込中...'; btn.disabled = true;
+        try {
+          const res = await chrome.runtime.sendMessage({ action: 'getSharedList', id: code });
+          if (res.success) {
+            processShareData(res.data);
+          } else {
+            alert('共有コードの読み込みに失敗しました: ' + (res.error || '不明なエラー'));
+          }
+        } catch (e) {
+          alert('読み込みエラー: ' + e.message);
+        }
+        btn.textContent = 'リストを読み込む'; btn.disabled = false;
+        return;
+      }
+
+      // 長いコード → 旧方式のBase64デコード
       const data = decodeShareCode(code);
       if (data) {
         processShareData(data);
@@ -348,9 +400,13 @@
     });
   }
 
-  // ── v1/v2フォーマット判定・処理 ──
+  // ── v1/v2/v3フォーマット判定・処理 ──
   function processShareData(data) {
-    if (data.v === 2) {
+    if (data.v === 3) {
+      // v3 クラウド共有フォーマット（メモ含む）
+      document.title = `NicoList - ${data.n || '共有リスト'}`;
+      renderSharedUI(data.n || '共有リスト', data.d);
+    } else if (data.v === 2) {
       // v2 最小化フォーマット
       document.title = `NicoList - ${data.n || '共有リスト'}`;
       renderSharedUI(data.n || '共有リスト', data.d);

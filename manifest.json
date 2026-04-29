@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NicoList - 動画リスト拡張",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "ニコニコ動画・YouTubeのマイリスト機能を拡張・強化する Chrome 拡張機能",
   "permissions": [
     "storage",

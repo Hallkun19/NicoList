@@ -141,10 +141,15 @@
         <button id="fv-settings-close" style="background:none;border:none;color:var(--nl-text-muted);cursor:pointer;padding:4px;font-size:18px;">✕</button>
       </div>
       <div style="overflow-y:auto;flex:1;">
-        <!-- セクション1: ダブルクリック即追加 -->
+        <!-- セクション1: クイック追加 -->
         <div style="${sectionStyle}">
-          <div style="${labelStyle}">ダブルクリック即追加</div>
-          <div style="${descStyle}">リスト追加ボタンをダブルクリックした時に、選択したリストへ即座に追加します。<br>シングルクリックは従来通りリスト選択ウィンドウが開きます。</div>
+          <div style="${labelStyle}">クイック追加</div>
+          <div style="${descStyle}">リスト追加ボタンの操作方法を選択できます。</div>
+          <select id="fv-settings-quick-add-mode" style="${selectStyle}margin-bottom:8px;">
+            <option value="dblclick" ${settings.quickAddMode === 'dblclick' ? 'selected' : ''}>ダブルクリックで即追加 / クリックでリスト選択</option>
+            <option value="click" ${settings.quickAddMode === 'click' ? 'selected' : ''}>クリックで即追加 / ダブルクリックでリスト選択</option>
+          </select>
+          <div style="${descStyle}margin-bottom:6px;">即追加先のリスト:</div>
           <select id="fv-settings-default-list" style="${selectStyle}">
             ${listOptions}
           </select>
@@ -195,7 +200,12 @@
     // 保存ボタン
     document.getElementById('fv-settings-save').addEventListener('click', async () => {
       const sel = document.getElementById('fv-settings-default-list');
-      const newSettings = { ...settings, defaultListId: sel.value || '' };
+      const modeSel = document.getElementById('fv-settings-quick-add-mode');
+      const newSettings = { 
+        ...settings, 
+        defaultListId: sel.value || '',
+        quickAddMode: modeSel.value || 'dblclick'
+      };
       await chrome.runtime.sendMessage({ action: 'saveSettings', settings: newSettings });
       showToast('設定を保存しました');
       overlay.remove();

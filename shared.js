@@ -421,13 +421,34 @@
   }
 
   // ── 初期化 ──
+  const urlParams = new URLSearchParams(window.location.search);
+  const codeParam = urlParams.get('c');
   const hash = location.hash.slice(1);
-  if (hash) {
-    const data = decodeShareCode(hash);
-    if (data) {
-      processShareData(data);
+  const initialCode = codeParam || hash;
+
+  if (initialCode) {
+    if (initialCode.length <= 10) {
+      // クラウドから取得
+      root.innerHTML = '<div class="shared-page"><div class="shared-content"><div style="text-align:center;padding:40px;color:var(--nl-text-muted);">リストを読み込んでいます...</div></div></div>';
+      chrome.runtime.sendMessage({ action: 'getSharedList', id: initialCode })
+        .then(res => {
+          if (res.success) {
+            processShareData(res.data);
+          } else {
+            root.innerHTML = `<div class="shared-page"><div class="shared-content"><div class="shared-empty"><h3>共有データの読み込みに失敗しました</h3><p>${escapeHtml(res.error || '')}</p></div></div></div>`;
+          }
+        })
+        .catch(e => {
+          root.innerHTML = `<div class="shared-page"><div class="shared-content"><div class="shared-empty"><h3>読み込みエラー</h3><p>${escapeHtml(e.message)}</p></div></div></div>`;
+        });
     } else {
-      root.innerHTML = '<div class="shared-page"><div class="shared-content"><div class="shared-empty"><h3>共有データの読み込みに失敗しました</h3><p>リンクが壊れている可能性があります。</p></div></div></div>';
+      // 旧方式 (Base64)
+      const data = decodeShareCode(initialCode);
+      if (data) {
+        processShareData(data);
+      } else {
+        root.innerHTML = '<div class="shared-page"><div class="shared-content"><div class="shared-empty"><h3>共有データの読み込みに失敗しました</h3><p>リンクが壊れている可能性があります。</p></div></div></div>';
+      }
     }
   } else {
     showPasteUI();

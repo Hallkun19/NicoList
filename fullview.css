@@ -388,3 +388,36 @@ svg { flex-shrink: 0; }
 }
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* ======== Update Banner ======== */
+.fv-update-banner {
+  background: rgba(0, 124, 255, 0.15);
+  border-bottom: 1px solid var(--nl-primary);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+  color: var(--nl-text);
+  flex-shrink: 0;
+}
+.fv-update-btn {
+  background: var(--nl-primary);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: 0.2s;
+}
+.fv-update-btn:hover { background: var(--nl-primary-hover); }
+.fv-update-close {
+  background: transparent;
+  border: none;
+  color: var(--nl-text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  transition: 0.2s;
+}
+.fv-update-close:hover { color: var(--nl-text); }

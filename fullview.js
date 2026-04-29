@@ -38,12 +38,37 @@
   const btnGrid = document.getElementById('btn-view-grid');
   const btnList = document.getElementById('btn-view-list');
 
-  // Load ViewMode preference
-  chrome.storage.local.get(['fvViewMode'], (res) => {
+  // Load ViewMode preference and check for updates
+  chrome.storage.local.get(['fvViewMode', 'updateAvailable'], (res) => {
     if (res.fvViewMode === 'list') {
       setViewMode('list');
     } else {
       setViewMode('grid');
+    }
+
+    if (res.updateAvailable) {
+      const banner = document.createElement('div');
+      banner.className = 'fv-update-banner';
+      
+      const releaseNoteHtml = res.updateAvailable.releaseNote 
+        ? `<div style="font-size: 12px; margin-top: 6px; color: var(--nl-text-secondary); line-height: 1.4;">${escapeHtml(res.updateAvailable.releaseNote).replace(/\n/g, '<br>')}</div>`
+        : '';
+
+      banner.innerHTML = `
+        <div style="display:flex; flex-direction:column; flex:1;">
+          <span style="font-weight:bold;">🚀 NicoListの新しいバージョン (v${escapeHtml(res.updateAvailable.version)}) が利用可能です！</span>
+          ${releaseNoteHtml}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-left:16px;">
+          <a href="${escapeHtml(res.updateAvailable.url)}" target="_blank" class="fv-update-btn">ダウンロード</a>
+          <button class="fv-update-close" title="閉じる">✕</button>
+        </div>
+      `;
+      document.querySelector('.fv-layout').prepend(banner);
+      banner.querySelector('.fv-update-close').addEventListener('click', () => {
+        banner.remove();
+        chrome.storage.local.remove('updateAvailable');
+      });
     }
   });
 

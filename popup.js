@@ -96,6 +96,34 @@
   // Initialization
   loadLists();
 
+  // 更新通知の確認
+  chrome.storage.local.get(['updateAvailable'], (res) => {
+    if (res.updateAvailable) {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'background:rgba(0,124,255,0.15);padding:8px 12px;font-size:12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--nl-primary); flex-shrink:0;';
+      
+      const releaseNoteHtml = res.updateAvailable.releaseNote 
+        ? `<div style="font-size: 11px; margin-top: 4px; color: var(--nl-text-secondary); line-height: 1.3;">${escapeHtml(res.updateAvailable.releaseNote).replace(/\n/g, '<br>')}</div>`
+        : '';
+
+      banner.innerHTML = `
+        <div style="display:flex; flex-direction:column; flex:1;">
+          <span style="color:var(--nl-text); font-weight:bold;">新バージョンが公開されています！(v${escapeHtml(res.updateAvailable.version)})</span>
+          ${releaseNoteHtml}
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; margin-left:12px;">
+          <a href="${escapeHtml(res.updateAvailable.url)}" target="_blank" style="background:var(--nl-primary);color:#fff;padding:4px 8px;border-radius:4px;text-decoration:none;font-weight:bold;">DL</a>
+          <button class="popup-update-close" style="background:none; border:none; color:var(--nl-text-muted); cursor:pointer; font-size:14px; padding:2px;" title="閉じる">✕</button>
+        </div>
+      `;
+      document.body.insertBefore(banner, document.querySelector('header'));
+      
+      banner.querySelector('.popup-update-close').addEventListener('click', () => {
+        banner.remove();
+        chrome.storage.local.remove('updateAvailable');
+      });
+    }
+  });
 
   // ═══════════════════════════════════════════════════════════
   //  View Navigation

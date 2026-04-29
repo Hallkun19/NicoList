@@ -15,6 +15,67 @@
 const DB_NAME = 'NicoListDB';
 const DB_VERSION = 2;
 
+// ═════════════════════════════════════════════════════════════
+//  Update Notifier (GitHub API)
+// ═════════════════════════════════════════════════════════════
+async function checkForUpdates() {
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/Hallkun19/NicoList/refs/heads/main/meta.yaml', { cache: 'no-store' });
+    if (!res.ok) return;
+    const text = await res.text();
+
+    let latestVersion = '';
+    let releaseNote = '';
+
+    const vMatch = text.match(/^version:\s*"([^"]+)"/m) || text.match(/^version:\s*'([^']+)'/m) || text.match(/^version:\s*([^\s]+)/m);
+    if (vMatch) latestVersion = vMatch[1];
+
+    const rMatch = text.match(/^releaseNote:\s*"([^"]+)"/m) || text.match(/^releaseNote:\s*'([^']+)'/m) || text.match(/^releaseNote:\s*(.+)/m);
+    if (rMatch) releaseNote = rMatch[1].replace(/\\n/g, '\n');
+
+    if (!latestVersion) return;
+    latestVersion = latestVersion.replace(/^v/, '');
+    const currentVersion = chrome.runtime.getManifest().version;
+
+    if (latestVersion !== currentVersion) {
+      const vL = latestVersion.split('.').map(Number);
+      const vC = currentVersion.split('.').map(Number);
+      let isNewer = false;
+      for (let i = 0; i < Math.max(vL.length, vC.length); i++) {
+        const numL = vL[i] || 0;
+        const numC = vC[i] || 0;
+        if (numL > numC) { isNewer = true; break; }
+        if (numL < numC) { break; }
+      }
+
+      if (isNewer) {
+        chrome.storage.local.set({
+          updateAvailable: {
+            version: latestVersion,
+            releaseNote: releaseNote,
+            url: 'https://github.com/Hallkun19/NicoList/releases/latest'
+          }
+        });
+      } else {
+        chrome.storage.local.remove('updateAvailable');
+      }
+    } else {
+      chrome.storage.local.remove('updateAvailable');
+    }
+  } catch (e) {
+    console.warn('NicoList: 更新確認に失敗', e);
+  }
+}
+
+chrome.runtime.onStartup.addListener(checkForUpdates);
+chrome.runtime.onInstalled.addListener(() => {
+  checkForUpdates();
+  chrome.alarms.create('checkUpdateAlarm', { periodInMinutes: 60 * 24 });
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'checkUpdateAlarm') checkForUpdates();
+});
+
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);

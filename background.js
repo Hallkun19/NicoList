@@ -402,25 +402,44 @@ async function addVideo(listId, videoInfo) {
   const exists = await isVideoInList(listId, videoInfo.videoId);
   if (exists) return { success: false, message: 'この動画は既に追加されています' };
 
-  // site フィールド追加（niconico / youtube）
+  let finalInfo = { ...videoInfo };
+
+  // ★ 改善: ニコニコ動画でいいね数が0（または不足）の場合、バックグラウンドで最新情報を取得し直す
+  if (finalInfo.site === 'niconico' && (finalInfo.likeCount === 0 || !finalInfo.ownerName)) {
+    try {
+      console.log(`NicoList [BG]: ss動画等の不足情報を補完中... (${finalInfo.videoId})`);
+      const fresh = await fetchVideoInfo(finalInfo.videoId);
+      if (fresh && !fresh.error) {
+        finalInfo.title = finalInfo.title || fresh.title;
+        finalInfo.thumbnailUrl = finalInfo.thumbnailUrl || fresh.thumbnailUrl;
+        finalInfo.viewCount = Math.max(finalInfo.viewCount, fresh.viewCount);
+        finalInfo.mylistCount = Math.max(finalInfo.mylistCount, fresh.mylistCount);
+        finalInfo.likeCount = Math.max(finalInfo.likeCount, fresh.likeCount);
+        finalInfo.ownerName = finalInfo.ownerName || fresh.ownerName;
+        finalInfo.ownerIcon = finalInfo.ownerIcon || fresh.ownerIcon;
+        finalInfo.description = finalInfo.description || fresh.description;
+      }
+    } catch (e) {
+      console.warn('NicoList [BG]: 追加時の情報補完に失敗', e);
+    }
+  }
+
   const video = {
     id: generateId(),
     listId,
-    videoId: videoInfo.videoId,
-    title: videoInfo.title || '',
-    thumbnailUrl: videoInfo.thumbnailUrl || '',
-    viewCount: videoInfo.viewCount || 0,
-    mylistCount: videoInfo.mylistCount || 0,
-    likeCount: videoInfo.likeCount || 0,
-    postedAt: videoInfo.postedAt || 0,
-    addedAt: videoInfo.addedAt || Date.now(),  // ★ 外部指定対応（共有インポート時の順序維持）
-    ownerName: videoInfo.ownerName || '',
-    ownerIcon: videoInfo.ownerIcon || '',
-    description: videoInfo.description || '',
-    site: videoInfo.site || 'niconico'
+    videoId: finalInfo.videoId,
+    title: finalInfo.title || '',
+    thumbnailUrl: finalInfo.thumbnailUrl || '',
+    viewCount: finalInfo.viewCount || 0,
+    mylistCount: finalInfo.mylistCount || 0,
+    likeCount: finalInfo.likeCount || 0,
+    postedAt: finalInfo.postedAt || 0,
+    addedAt: finalInfo.addedAt || Date.now(),
+    ownerName: finalInfo.ownerName || '',
+    ownerIcon: finalInfo.ownerIcon || '',
+    description: finalInfo.description || '',
+    site: finalInfo.site || 'niconico'
   };
-
-  console.log(`NicoList [BG] addVideo: likeCount=${video.likeCount} (videoId: ${video.videoId})`);
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction(['videos', 'lists'], 'readwrite');
@@ -687,17 +706,14 @@ function unifyThumb(url) {
 // ═════════════════════════════════════════════════════════════
 
 async function fetchVideoInfo(videoId) {
-  // --- 方法1: スナップショット検索API v2 ---
-  // 軽量かつレート制限が緩いため、最初に使用する
+  let info = null;
+
+  // --- 方法1: スナップショット検索API v2 (軽量・基本情報) ---
   try {
     const params = new URLSearchParams({
       targets: 'title',
       fields: 'contentId,title,viewCounter,mylistCounter,likeCounter,thumbnailUrl,startTime',
-      _context: 'NicoList',
-      q: '',
-      _limit: '1',
-      _offset: '0',
-      _sort: '-viewCounter',
+      _context: 'NicoList', q: '', _limit: '1', _offset: '0', _sort: '-viewCounter',
       'filters[contentId][0]': videoId
     });
     const res = await fetch(`https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?${params}`);
@@ -705,7 +721,7 @@ async function fetchVideoInfo(videoId) {
       const json = await res.json();
       const item = json.data?.[0];
       if (item) {
-        return {
+        info = {
           videoId: item.contentId,
           title: item.title ?? '',
           thumbnailUrl: unifyThumb(item.thumbnailUrl ?? ''),
@@ -713,51 +729,96 @@ async function fetchVideoInfo(videoId) {
           mylistCount: item.mylistCounter ?? 0,
           likeCount: item.likeCounter ?? 0,
           postedAt: item.startTime ? new Date(item.startTime).getTime() : 0,
-          ownerName: '',
-          ownerIcon: '',
-          description: '',
-          site: 'niconico'
+          ownerName: '', ownerIcon: '', description: '', site: 'niconico'
         };
       }
     }
-  } catch (e) {
-    console.warn('NicoList: スナップショットAPI失敗', videoId, e.message);
-  }
+  } catch (e) { }
 
-  // --- 方法2: v3_guest API ---
-  // スナップショットで見つからない場合（新着動画などはインデックス遅延がある）
-  try {
-    const trackId = `${Math.random().toString(36).slice(2, 12)}_${Math.floor(Date.now() / 1000)}`;
-    const res = await fetch(
-      `https://www.nicovideo.jp/api/watch/v3_guest/${videoId}?actionTrackId=${trackId}&noSideEffect=true`,
-      { headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0', 'Referer': 'https://www.nicovideo.jp/', 'Origin': 'https://www.nicovideo.jp' } }
-    );
-    if (res.ok) {
-      const json = await res.json();
-      const v = json.data?.video;
-      const o = json.data?.owner || json.data?.channel;
-      if (v) {
-        const counts = v.count || {};
-        const icon = o?.iconUrl || o?.thumbnailUrl || 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg';
-        return {
-          videoId: v.id || videoId,
-          title: v.title ?? '',
-          thumbnailUrl: unifyThumb(v.thumbnail?.ogp || v.thumbnail?.largeUrl || v.thumbnail?.middleUrl || v.thumbnail?.url || ''),
-          viewCount: counts.view ?? 0,
-          mylistCount: counts.mylist ?? 0,
-          likeCount: (typeof counts.like === 'number') ? counts.like : (Number(counts.like) || 0),
-          postedAt: v.registeredAt ? new Date(v.registeredAt).getTime() : 0,
-          ownerName: o?.nickname || o?.name || '',
-          ownerIcon: icon,
-          description: v.description ?? '',
-          site: 'niconico'
-        };
+  // --- 方法2: NVAPI (詳細・投稿者情報・非公開ステータス対応) ---
+  // Method 1が失敗、または情報不足（タイトルがID、投稿者名がない等）の場合に実行
+  if (!info || !info.ownerName || info.title === videoId) {
+    try {
+      const res = await fetch(
+        `https://nvapi.nicovideo.jp/v1/videos?watchIds=${videoId}`,
+        { headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0', 'Referer': 'https://www.nicovideo.jp/', 'Origin': 'https://www.nicovideo.jp' } }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const item = json.data?.items?.[0];
+        const v = item?.video;
+        const o = v?.owner;
+        if (v) {
+          const counts = v.count || {};
+          const icon = o?.iconUrl || 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg';
+          const fresh = {
+            videoId: v.id || videoId,
+            title: v.title ?? '',
+            thumbnailUrl: unifyThumb(v.thumbnail?.largeUrl || v.thumbnail?.middleUrl || v.thumbnail?.url || ''),
+            viewCount: counts.view ?? 0,
+            mylistCount: counts.mylist ?? 0,
+            likeCount: counts.like ?? 0,
+            postedAt: v.registeredAt ? new Date(v.registeredAt).getTime() : 0,
+            ownerName: o?.name || '',
+            ownerIcon: icon,
+            description: v.shortDescription ?? '',
+            site: 'niconico'
+          };
+          // API(NVAPI)から取れた確定情報を優先して上書き
+          if (info) {
+            info = {
+              ...info,
+              title: fresh.title || info.title,
+              thumbnailUrl: fresh.thumbnailUrl || info.thumbnailUrl,
+              viewCount: fresh.viewCount || info.viewCount,
+              mylistCount: fresh.mylistCount || info.mylistCount,
+              likeCount: fresh.likeCount || info.likeCount,
+              ownerName: fresh.ownerName || info.ownerName,
+              ownerIcon: fresh.ownerIcon || info.ownerIcon,
+              description: fresh.description || info.description
+            };
+          } else {
+            info = fresh;
+          }
+        }
       }
-    }
-  } catch (e) {
-    console.warn('NicoList: v3_guest API失敗', videoId, e.message);
+    } catch (e) { }
   }
 
+  // --- 方法3: getthumbinfo (最終フォールバック) ---
+  if (!info || !info.title || info.title === videoId) {
+    try {
+      const res = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`);
+      if (res.ok) {
+        const xml = await res.text();
+        const titleMatch = xml.match(/<title>([^<]+)<\/title>/);
+        if (titleMatch) {
+          const title = titleMatch[1];
+          const thumbMatch = xml.match(/<thumbnail_url>([^<]+)<\/thumbnail_url>/);
+          const viewMatch = xml.match(/<view_counter>(\d+)<\/view_counter>/);
+          const mylistMatch = xml.match(/<mylist_counter>(\d+)<\/mylist_counter>/);
+          const dateMatch = xml.match(/<first_retrieve>([^<]+)<\/first_retrieve>/);
+          const ownerMatch = xml.match(/<user_nickname>([^<]+)<\/user_nickname>/) || xml.match(/<ch_name>([^<]+)<\/ch_name>/);
+
+          const fallback = {
+            videoId,
+            title: title,
+            thumbnailUrl: thumbMatch ? thumbMatch[1] : `https://nicovideo.cdn.nimg.jp/thumbnails/${videoId.replace(/\D/g,'')}/${videoId.replace(/\D/g,'')}.L`,
+            viewCount: viewMatch ? parseInt(viewMatch[1], 10) : 0,
+            mylistCount: mylistMatch ? parseInt(mylistMatch[1], 10) : 0,
+            likeCount: 0,
+            postedAt: dateMatch ? new Date(dateMatch[1]).getTime() : 0,
+            ownerName: ownerMatch ? ownerMatch[1] : '',
+            ownerIcon: '', description: '', site: 'niconico'
+          };
+          if (info) info = { ...fallback, ...info, title: fallback.title || info.title };
+          else info = fallback;
+        }
+      }
+    } catch (e) { }
+  }
+
+  if (info) return info;
   return { error: '動画情報を取得できませんでした', videoId };
 }
 

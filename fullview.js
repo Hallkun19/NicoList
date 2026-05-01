@@ -555,10 +555,10 @@
     const el = document.createElement('div');
     el.className = 'fv-video-card';
 
-    // v2.0: site対応のURL生成
-    const watchUrl = video.site === 'youtube'
-      ? `https://www.youtube.com/watch?v=${video.videoId}`
-      : `https://www.nicovideo.jp/watch/${video.videoId}`;
+    let watchUrl = `https://www.nicovideo.jp/watch/${video.videoId}`;
+    if (video.site === 'youtube') watchUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
+    else if (video.site === 'bilibili') watchUrl = `https://www.bilibili.com/video/${video.videoId}`;
+    else if (video.site === 'soundcloud') watchUrl = `https://soundcloud.com/${video.videoId}`;
 
     // v1.4: 投稿日と追加日の分離
     const postedDateStr = new Date(video.postedAt || 0).toLocaleDateString();
@@ -766,7 +766,11 @@
         v: 3,
         n: listName,
         d: videos.map(v => {
-          const entry = { id: v.videoId, s: v.site === 'youtube' ? 'y' : 'n' };
+          let s = 'n';
+          if (v.site === 'youtube') s = 'y';
+          else if (v.site === 'bilibili') s = 'b';
+          else if (v.site === 'soundcloud') s = 'sc';
+          const entry = { id: v.videoId, s };
           if (v.memo) entry.m = v.memo;
           if (v.ownerName) entry.on = v.ownerName;
           if (v.ownerIcon) entry.oi = v.ownerIcon;
@@ -785,7 +789,13 @@
 
       if (!result.success) {
         // クラウド失敗時は旧方式にフォールバック
-        const fallbackData = { v: 2, n: listName, d: videos.map(v => [v.videoId, v.site === 'youtube' ? 'y' : 'n']) };
+        const fallbackData = { v: 2, n: listName, d: videos.map(v => {
+          let s = 'n';
+          if (v.site === 'youtube') s = 'y';
+          else if (v.site === 'bilibili') s = 'b';
+          else if (v.site === 'soundcloud') s = 'sc';
+          return [v.videoId, s];
+        }) };
         const fallbackCode = encodeShareCode(fallbackData);
         modal.querySelector('.fv-share-body').innerHTML = `
           <div style="padding:12px;color:var(--nl-warning);font-size:12px;">⚠ クラウド共有に失敗しました（${escapeHtml(result.error || '不明なエラー')}）。旧方式のコードを生成しました（メモは含まれません）。</div>

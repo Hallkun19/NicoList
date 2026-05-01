@@ -17,3 +17,5 @@ node_modules/
 # Cloudflare Worker
 worker/node_modules/
 worker/.wrangler/
+
+tmp/

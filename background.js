@@ -170,9 +170,12 @@ async function cachedFetchVideoInfo(videoId, site, forceRefresh) {
     const cached = await getCachedVideoInfo(videoId);
     if (cached) return cached;
   }
-  const info = (site === 'youtube')
-    ? await fetchYouTubeVideoInfo(videoId)
-    : await fetchVideoInfo(videoId);
+  let info = null;
+  if (site === 'youtube') info = await fetchYouTubeVideoInfo(videoId);
+  else if (site === 'bilibili') info = await fetchBilibiliVideoInfo(videoId);
+  else if (site === 'soundcloud') info = await fetchSoundCloudVideoInfo(videoId);
+  else info = await fetchVideoInfo(videoId);
+  
   if (info && !info.error) {
     await setCachedVideoInfo(videoId, info);
   }
@@ -236,6 +239,8 @@ async function handleMessage(msg, sender) {
     // ─── 動画情報取得（API） ────────────────────
     case 'fetchVideoInfo': return await cachedFetchVideoInfo(msg.videoId, 'niconico', msg.forceRefresh);
     case 'fetchYouTubeVideoInfo': return await cachedFetchVideoInfo(msg.videoId, 'youtube', msg.forceRefresh);
+    case 'fetchBilibiliVideoInfo': return await cachedFetchVideoInfo(msg.videoId, 'bilibili', msg.forceRefresh);
+    case 'fetchSoundCloudVideoInfo': return await cachedFetchVideoInfo(msg.videoId, 'soundcloud', msg.forceRefresh);
 
     // ─── リスト内動画の情報一括更新 ───────────────
     case 'refreshVideos': return await refreshVideos(msg.listId);
@@ -533,6 +538,8 @@ async function removeVideo(videoDbId) {
 
 function buildWatchUrl(videoId, site) {
   if (site === 'youtube') return `https://www.youtube.com/watch?v=${videoId}`;
+  if (site === 'bilibili') return `https://www.bilibili.com/video/${videoId}`;
+  if (site === 'soundcloud') return `https://soundcloud.com/${videoId}`;
   return `https://www.nicovideo.jp/watch/${videoId}`;
 }
 
@@ -888,6 +895,96 @@ async function fetchMylistVideos(mylistId) {
   } catch (e) { console.warn('NicoList: RSS マイリスト取得失敗', e); }
 
   return { success: false, error: 'マイリスト取得に失敗', videos: [] };
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Bilibili動画情報取得
+// ═════════════════════════════════════════════════════════════
+
+async function fetchBilibiliVideoInfo(bvid) {
+  try {
+    const res = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+    if (res.ok) {
+      const json = await res.json();
+      const data = json.data;
+      if (data) {
+        return {
+          videoId: bvid,
+          title: data.title || '',
+          thumbnailUrl: data.pic || '',
+          viewCount: data.stat?.view || 0,
+          mylistCount: data.stat?.favorite || 0,
+          likeCount: data.stat?.like || 0,
+          postedAt: data.pubdate ? data.pubdate * 1000 : 0,
+          ownerName: data.owner?.name || '',
+          ownerIcon: data.owner?.face || '',
+          description: data.desc || '',
+          site: 'bilibili'
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('NicoList: Bilibili API失敗', bvid, e.message);
+  }
+  return { error: '動画情報を取得できませんでした', videoId: bvid };
+}
+
+// ═════════════════════════════════════════════════════════════
+//  SoundCloud動画情報取得
+// ═════════════════════════════════════════════════════════════
+
+async function fetchSoundCloudVideoInfo(urlPath) {
+  const fullUrl = urlPath.startsWith('http') ? urlPath : `https://soundcloud.com/${urlPath.replace(/^\//, '')}`;
+  const videoId = fullUrl.replace(/^https?:\/\/(www\.)?soundcloud\.com\//, '');
+  
+  let info = {
+    videoId: videoId,
+    title: videoId,
+    thumbnailUrl: '',
+    viewCount: 0,
+    mylistCount: 0,
+    likeCount: 0,
+    postedAt: 0,
+    ownerName: '',
+    ownerIcon: '',
+    description: '',
+    site: 'soundcloud'
+  };
+
+  // 1. 基本情報 (oEmbed)
+  try {
+    const oembedRes = await fetch(`https://soundcloud.com/oembed?url=${encodeURIComponent(fullUrl)}&format=json`);
+    if (oembedRes.ok) {
+      const oembedData = await oembedRes.json();
+      info.title = oembedData.title || info.title;
+      info.thumbnailUrl = oembedData.thumbnail_url || info.thumbnailUrl;
+      info.ownerName = oembedData.author_name || info.ownerName;
+      info.description = oembedData.description || info.description;
+    }
+  } catch(e) { console.warn("NicoList: SC oEmbed API失敗", e); }
+
+  // 2. 詳細情報 (HTMLスクレイピング - 再生数・いいね数・投稿日)
+  try {
+    const htmlRes = await fetch(fullUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (htmlRes.ok) {
+      const html = await htmlRes.text();
+      const playMatch = html.match(/<meta\s+property="soundcloud:play_count"\s+content="(\d+)"/i);
+      if (playMatch) info.viewCount = parseInt(playMatch[1], 10) || 0;
+      
+      const likeMatch = html.match(/<meta\s+property="soundcloud:like_count"\s+content="(\d+)"/i);
+      if (likeMatch) info.likeCount = parseInt(likeMatch[1], 10) || 0;
+      
+      const dateMatch = html.match(/"created_at":"([^"]+)"/);
+      if (dateMatch) {
+         info.postedAt = new Date(dateMatch[1]).getTime() || 0;
+      }
+    }
+  } catch(e) { console.warn("NicoList: SC HTML parse失敗", e); }
+
+  if (info.title === videoId && info.viewCount === 0) {
+     return { error: '動画情報を取得できませんでした', videoId };
+  }
+  return info;
 }
 
 // ═════════════════════════════════════════════════════════════

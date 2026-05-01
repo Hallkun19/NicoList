@@ -391,10 +391,10 @@
     const el = document.createElement('div');
     el.className = 'video-item';
 
-    // v2.0: site対応URL
-    const watchUrl = video.site === 'youtube'
-      ? `https://www.youtube.com/watch?v=${video.videoId}`
-      : `https://www.nicovideo.jp/watch/${video.videoId}`;
+    let watchUrl = `https://www.nicovideo.jp/watch/${video.videoId}`;
+    if (video.site === 'youtube') watchUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
+    else if (video.site === 'bilibili') watchUrl = `https://www.bilibili.com/video/${video.videoId}`;
+    else if (video.site === 'soundcloud') watchUrl = `https://soundcloud.com/${video.videoId}`;
     const postedDateStr = new Date(video.postedAt || 0).toLocaleDateString();
     const addedDateStr = new Date(video.addedAt || video.postedAt).toLocaleDateString();
 

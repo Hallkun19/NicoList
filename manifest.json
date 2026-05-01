@@ -16,6 +16,9 @@
     "*://nvapi.nicovideo.jp/*",
     "*://*.youtube.com/*",
     "*://noembed.com/*",
+    "*://*.bilibili.com/*",
+    "*://api.bilibili.com/*",
+    "*://*.soundcloud.com/*",
     "*://*.workers.dev/*",
     "https://raw.githubusercontent.com/*"
   ],
@@ -26,7 +29,9 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*.nicovideo.jp/watch/*"
+        "*://*.nicovideo.jp/watch/*",
+        "*://*.bilibili.com/video/*",
+        "*://soundcloud.com/*"
       ],
       "js": [
         "storage.js",

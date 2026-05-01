@@ -35,7 +35,17 @@
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
   }
   function buildWatchUrl(vid, site) {
-    return site === 'youtube' ? `https://www.youtube.com/watch?v=${vid}` : `https://www.nicovideo.jp/watch/${vid}`;
+    if (site === 'youtube') return `https://www.youtube.com/watch?v=${vid}`;
+    if (site === 'bilibili') return `https://www.bilibili.com/video/${vid}`;
+    if (site === 'soundcloud') return `https://soundcloud.com/${vid}`;
+    return `https://www.nicovideo.jp/watch/${vid}`;
+  }
+
+  function getSiteName(siteCode) {
+    if (siteCode === 'y') return 'youtube';
+    if (siteCode === 'b') return 'bilibili';
+    if (siteCode === 'sc') return 'soundcloud';
+    return 'niconico';
   }
 
   // ── Base64デコード ──
@@ -67,6 +77,9 @@
       if (video.site === 'youtube') {
         thumbUrl = `https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`;
         fallbackUrl = `https://i.ytimg.com/vi/${video.videoId}/mqdefault.jpg`;
+      } else if (video.site === 'bilibili' || video.site === 'soundcloud') {
+        thumbUrl = ''; // APIから取得されるまでプレースホルダー
+        fallbackUrl = '';
       } else {
         const numericId = video.videoId.replace(/^sm|ss|nm|so/, '');
         thumbUrl = `https://nicovideo.cdn.nimg.jp/thumbnails/${numericId}/${numericId}.jpg`;
@@ -76,7 +89,7 @@
       // 取得済みの場合は汎用フォールバック
       if (video.site === 'youtube') {
         fallbackUrl = `https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`;
-      } else {
+      } else if (video.site === 'niconico' || !video.site) {
         const numericId = video.videoId.replace(/^sm|ss|nm|so/, '');
         fallbackUrl = `https://tn.smilevideo.jp/smile?i=${numericId}`;
       }
@@ -220,20 +233,20 @@
     if (isV3) {
       videosData = entries.map(e => ({
         videoId: e.id,
-        site: e.s === 'y' ? 'youtube' : 'niconico',
+        site: getSiteName(e.s),
         title: e.id,
         thumbnailUrl: e.s === 'y' ? `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg` : '',
-        viewCount: 0, likeCount: 0, mylistCount: e.s === 'y' ? -1 : 0,
+        viewCount: 0, likeCount: 0, mylistCount: (e.s === 'y' || e.s === 'sc') ? -1 : 0,
         postedAt: 0, ownerName: e.on || '', ownerIcon: e.oi || '', description: '',
         memo: e.m || ''
       }));
     } else {
       videosData = entries.map(([vid, siteCode]) => ({
         videoId: vid,
-        site: siteCode === 'y' ? 'youtube' : 'niconico',
+        site: getSiteName(siteCode),
         title: vid,
         thumbnailUrl: siteCode === 'y' ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : '',
-        viewCount: 0, likeCount: 0, mylistCount: siteCode === 'y' ? -1 : 0,
+        viewCount: 0, likeCount: 0, mylistCount: (siteCode === 'y' || siteCode === 'sc') ? -1 : 0,
         postedAt: 0, ownerName: '', ownerIcon: '', description: ''
       }));
     }
@@ -258,8 +271,12 @@
       const chunkIndices = Array.from({ length: chunk.length }, (_, idx) => i + idx);
 
       await Promise.all(chunk.map(async ([vid, siteCode], chunkIdx) => {
-        const site = siteCode === 'y' ? 'youtube' : 'niconico';
-        const action = site === 'youtube' ? 'fetchYouTubeVideoInfo' : 'fetchVideoInfo';
+        const site = getSiteName(siteCode);
+        let action = 'fetchVideoInfo';
+        if (site === 'youtube') action = 'fetchYouTubeVideoInfo';
+        else if (site === 'bilibili') action = 'fetchBilibiliVideoInfo';
+        else if (site === 'soundcloud') action = 'fetchSoundCloudVideoInfo';
+        
         const globalIdx = chunkIndices[chunkIdx];
 
         try {
@@ -273,7 +290,7 @@
               thumbnailUrl: info.thumbnailUrl || videosData[globalIdx].thumbnailUrl,
               viewCount: info.viewCount ?? 0,
               likeCount: info.likeCount ?? 0,
-              mylistCount: info.mylistCount ?? (site === 'youtube' ? -1 : 0),
+              mylistCount: info.mylistCount ?? ((site === 'youtube' || site === 'soundcloud') ? -1 : 0),
               postedAt: info.postedAt ?? 0,
               ownerName: info.ownerName || '',
               ownerIcon: info.ownerIcon || '',

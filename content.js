@@ -16,8 +16,25 @@
   let cachedNextUrl = null;
 
   function getCurrentVideoId() {
+    if (location.hostname.includes('bilibili.com')) {
+      const match = location.pathname.match(/\/video\/(BV\w+)/i);
+      return match ? match[1] : null;
+    }
+    if (location.hostname.includes('soundcloud.com')) {
+      const path = location.pathname.replace(/^\//, '');
+      if (path && path.includes('/') && !path.startsWith('discover') && !path.startsWith('stream')) {
+        return path;
+      }
+      return null;
+    }
     const match = location.pathname.match(/\/watch\/((?:sm|ss|nm|so|ca|ax|yo|nl|ig|na|cw|z[a-z]|om|sk|yk)\d+)/i);
     return match ? match[1] : null;
+  }
+
+  function getCurrentSite() {
+    if (location.hostname.includes('bilibili.com')) return 'bilibili';
+    if (location.hostname.includes('soundcloud.com')) return 'soundcloud';
+    return 'niconico';
   }
 
   // ═════════════════════════════════════════════════════════
@@ -32,8 +49,16 @@
 
 
   async function getVideoInfoFromPage() {
+    const site = getCurrentSite();
     const videoId = getCurrentVideoId();
     if (!videoId) return null;
+
+    if (site === 'bilibili') {
+      return await chrome.runtime.sendMessage({ action: 'fetchBilibiliVideoInfo', videoId });
+    }
+    if (site === 'soundcloud') {
+      return await chrome.runtime.sendMessage({ action: 'fetchSoundCloudVideoInfo', videoId });
+    }
 
     let info = {
       videoId: videoId, title: '', thumbnailUrl: '', viewCount: 0, mylistCount: 0,
@@ -401,6 +426,41 @@
       // 既に挿入済みの場合は成功とする
       if (document.getElementById('nicolist-add-btn')) return true;
 
+      const site = getCurrentSite();
+
+      // Bilibili用
+      if (site === 'bilibili') {
+        const target = document.querySelector('#bilibili-player > div > div > div.bpx-player-primary-area > div.bpx-player-video-area > div.bpx-player-control-wrap > div.bpx-player-control-entity > div.bpx-player-control-bottom > div.bpx-player-control-bottom-right');
+        if (target) {
+          target.insertAdjacentHTML('beforeend', `
+            <div class="bpx-player-ctrl-btn" style="display:flex; align-items:center; justify-content:center; cursor:pointer; color:inherit;">
+              <button id="nicolist-add-btn" aria-label="NicoListに追加" title="NicoListに追加" 
+                style="cursor:pointer; background:none; border:none; display:flex; align-items:center; color:inherit; padding:0;">
+                 ${ICONS.playList}
+              </button>
+            </div>
+          `);
+          bindAddBtnEvents(document.getElementById('nicolist-add-btn'));
+          return true;
+        }
+        return false;
+      }
+
+      // SoundCloud用
+      if (site === 'soundcloud') {
+        const target = document.querySelector('#content > div > div.l-listen-wrapper > div.l-about-main > div > div:nth-child(1) > div > div > div.listenEngagement__footer.sc-py-1x.sc-px-2x > div > div.sc-button-group.sc-button-group-medium');
+        if (target) {
+          target.insertAdjacentHTML('beforeend', `
+            <button id="nicolist-add-btn" type="button" class="sc-button-like sc-button-secondary sc-button sc-button-medium sc-button-icon sc-button-responsive" aria-label="NicoListに追加" title="NicoListに追加" tabindex="0">
+              <div style="display:flex; align-items:center; justify-content:center;">${ICONS.playList}</div>
+            </button>
+          `);
+          bindAddBtnEvents(document.getElementById('nicolist-add-btn'));
+          return true;
+        }
+        return false;
+      }
+
       // 案1: 動画ホバー時の操作UI（設定ボタンの左隣）に統合
       let settingButton = document.querySelector("button[aria-label='設定'], [data-testid='setting-button']");
       if (settingButton && settingButton.parentElement) {
@@ -683,7 +743,7 @@
     if (loopObserver) { loopObserver.disconnect(); loopObserver = null; }
 
     const attach = () => {
-      const video = document.querySelector('video[data-name="video-content"], video');
+      const video = document.querySelector('video[data-name="video-content"], bwp-video, video');
       if (video) {
         // === ループ動画修正: loop属性を強制的にfalseにする ===
         if (video.loop) {

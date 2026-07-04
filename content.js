@@ -430,14 +430,13 @@
 
       // Bilibili用
       if (site === 'bilibili') {
-        const target = document.querySelector('#bilibili-player > div > div > div.bpx-player-primary-area > div.bpx-player-video-area > div.bpx-player-control-wrap > div.bpx-player-control-entity > div.bpx-player-control-bottom > div.bpx-player-control-bottom-right');
+        const target = document.querySelector('#arc_toolbar_report > div.video-toolbar-right');
         if (target) {
-          target.insertAdjacentHTML('beforeend', `
-            <div class="bpx-player-ctrl-btn" style="display:flex; align-items:center; justify-content:center; cursor:pointer; color:inherit;">
-              <button id="nicolist-add-btn" aria-label="NicoListに追加" title="NicoListに追加" 
-                style="cursor:pointer; background:none; border:none; display:flex; align-items:center; color:inherit; padding:0;">
-                 ${ICONS.playList}
-              </button>
+          target.insertAdjacentHTML('afterbegin', `
+            <div id="nicolist-add-btn" class="video-complaint video-toolbar-right-item toolbar-right-complaint" style="cursor:pointer; display:flex; align-items:center;">
+              <span class="video-complaint-icon video-toolbar-item-icon" style="display:flex; align-items:center; margin-right:4px;">
+                ${ICONS.playList}
+              </span><span class="video-complaint-info video-toolbar-item-text">リストに追加</span>
             </div>
           `);
           bindAddBtnEvents(document.getElementById('nicolist-add-btn'));

@@ -117,12 +117,39 @@ class NicoListStorage {
   async getAllLists() {
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction('lists', 'readonly');
-      const request = tx.objectStore('lists').getAll();
+      const tx = db.transaction(['lists', 'videos'], 'readonly');
+      const listStore = tx.objectStore('lists');
+      const videoStore = tx.objectStore('videos');
+      const videoIndex = videoStore.index('listId');
+
+      const request = listStore.getAll();
       request.onsuccess = () => {
-        // 作成日時でソート（新しい順）
-        const lists = request.result.sort((a, b) => b.createdAt - a.createdAt);
-        resolve(lists);
+        const lists = request.result;
+        if (lists.length === 0) {
+          resolve([]);
+          return;
+        }
+
+        let pending = lists.length;
+        lists.forEach(list => {
+          const countReq = videoIndex.count(IDBKeyRange.only(list.id));
+          countReq.onsuccess = () => {
+            list.videoCount = countReq.result;
+            pending--;
+            if (pending === 0) {
+              lists.sort((a, b) => b.createdAt - a.createdAt);
+              resolve(lists);
+            }
+          };
+          countReq.onerror = () => {
+            list.videoCount = 0;
+            pending--;
+            if (pending === 0) {
+              lists.sort((a, b) => b.createdAt - a.createdAt);
+              resolve(lists);
+            }
+          };
+        });
       };
       request.onerror = (e) => reject(new Error('リスト取得失敗: ' + e.target.error));
     });

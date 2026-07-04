@@ -26,6 +26,7 @@
   let currentListId = null;
   let viewMode = 'grid'; // 'grid' | 'list'
   let draggedItem = null;
+  let currentVideos = [];
 
   // DOM
   const listsContainer = document.getElementById('fv-lists-container');
@@ -79,7 +80,8 @@
   document.getElementById('btn-fv-create-list').addEventListener('click', handleCreateList);
   document.getElementById('input-fv-new-list').addEventListener('keypress', e => { if (e.key === 'Enter') handleCreateList(); });
 
-  document.getElementById('fv-select-sort').addEventListener('change', loadVideos);
+  document.getElementById('fv-select-sort').addEventListener('change', filterAndRenderVideos);
+  document.getElementById('fv-input-search').addEventListener('input', filterAndRenderVideos);
   document.getElementById('btn-fv-play-cont').addEventListener('click', () => handlePlay(false));
   document.getElementById('btn-fv-play-shuffle').addEventListener('click', () => handlePlay(true));
   document.getElementById('btn-fv-refresh').addEventListener('click', handleRefreshVideos);
@@ -339,7 +341,7 @@
       }
       listsContainer.innerHTML = '';
       for (const list of lists) {
-        const count = await chrome.runtime.sendMessage({ action: 'getVideoCount', listId: list.id });
+        const count = list.videoCount !== undefined ? list.videoCount : 0;
         const el = createListElement(list, count);
         listsContainer.appendChild(el);
       }
@@ -472,61 +474,102 @@
     if (!currentListId) return;
     videosContainer.innerHTML = '<div class="fv-loading">読み込み中...</div>';
 
-    const sortVal = document.getElementById('fv-select-sort').value;
-    const [sortKey, sortOrder] = sortVal.split('_');
-
     try {
-      const videos = await chrome.runtime.sendMessage({
-        action: 'getVideos', listId: currentListId, sortKey, sortOrder
+      currentVideos = await chrome.runtime.sendMessage({
+        action: 'getVideos', listId: currentListId, sortKey: 'addedAt', sortOrder: 'desc'
       });
 
-      if (!videos || videos.length === 0) {
+      if (!currentVideos || currentVideos.length === 0) {
         videosContainer.innerHTML = '<div class="fv-empty">動画がありません。<br>ニコニコ動画またはYouTubeから動画を追加してください。</div>';
         countEl.textContent = '0件';
         controlsEl.classList.add('hidden');
         return;
       }
 
-      countEl.textContent = `${videos.length}件`;
       controlsEl.classList.remove('hidden');
-      videosContainer.innerHTML = '';
-
-      // v2.0: 段階ロード（50件ずつ）
-      const PAGE_SIZE = 50;
-      let loadedCount = 0;
-
-      function loadBatch() {
-        const end = Math.min(loadedCount + PAGE_SIZE, videos.length);
-        for (let i = loadedCount; i < end; i++) {
-          videosContainer.appendChild(createVideoCard(videos[i]));
-        }
-        loadedCount = end;
-
-        if (loadedCount < videos.length) {
-          let sentinel = document.getElementById('fv-load-more');
-          if (!sentinel) {
-            sentinel = document.createElement('div');
-            sentinel.id = 'fv-load-more';
-            sentinel.className = 'fv-loading';
-            sentinel.textContent = `さらに読み込み中... (${loadedCount}/${videos.length})`;
-          }
-          videosContainer.appendChild(sentinel);
-
-          const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) {
-              observer.disconnect();
-              sentinel.remove();
-              loadBatch();
-            }
-          }, { threshold: 0.1 });
-          observer.observe(sentinel);
-        }
-      }
-
-      loadBatch();
+      filterAndRenderVideos();
     } catch (err) {
       videosContainer.innerHTML = `<div class="fv-empty" style="color:var(--nl-danger);">エラー: ${err.message}</div>`;
     }
+  }
+
+  function filterAndRenderVideos() {
+    if (!currentVideos) return;
+
+    // 1. 検索フィルタリング
+    const searchVal = document.getElementById('fv-input-search').value.trim().toLowerCase();
+    let filtered = [...currentVideos]; // 元の順序を壊さないように浅いコピーを作成
+    if (searchVal) {
+      filtered = filtered.filter(v => {
+        const title = (v.title || '').toLowerCase();
+        const desc = (v.description || '').toLowerCase();
+        const memo = (v.memo || '').toLowerCase();
+        const owner = (v.ownerName || '').toLowerCase();
+        const vid = (v.videoId || '').toLowerCase();
+        return title.includes(searchVal) || desc.includes(searchVal) || memo.includes(searchVal) || owner.includes(searchVal) || vid.includes(searchVal);
+      });
+    }
+
+    // 2. ソート処理
+    const sortVal = document.getElementById('fv-select-sort').value;
+    const [sortKey, sortOrder] = sortVal.split('_');
+    filtered.sort((a, b) => {
+      let valA = a[sortKey];
+      let valB = b[sortKey];
+
+      if (typeof valA === 'string' && !isNaN(valA)) valA = Number(valA);
+      if (typeof valB === 'string' && !isNaN(valB)) valB = Number(valB);
+
+      valA = valA !== undefined && valA !== null ? valA : 0;
+      valB = valB !== undefined && valB !== null ? valB : 0;
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      return sortOrder === 'asc' ? valA - valB : valB - valA;
+    });
+
+    countEl.textContent = `${filtered.length}件`;
+    videosContainer.innerHTML = '';
+
+    if (filtered.length === 0) {
+      videosContainer.innerHTML = '<div class="fv-empty">一致する動画がありません。</div>';
+      return;
+    }
+
+    // 3. 段階ロード（50件ずつ）
+    const PAGE_SIZE = 50;
+    let loadedCount = 0;
+
+    function loadBatch() {
+      const end = Math.min(loadedCount + PAGE_SIZE, filtered.length);
+      for (let i = loadedCount; i < end; i++) {
+        videosContainer.appendChild(createVideoCard(filtered[i]));
+      }
+      loadedCount = end;
+
+      if (loadedCount < filtered.length) {
+        let sentinel = document.getElementById('fv-load-more');
+        if (!sentinel) {
+          sentinel = document.createElement('div');
+          sentinel.id = 'fv-load-more';
+          sentinel.className = 'fv-loading';
+          sentinel.textContent = `さらに読み込み中... (${loadedCount}/${filtered.length})`;
+        }
+        videosContainer.appendChild(sentinel);
+
+        const observer = new IntersectionObserver((entries) => {
+          if (entries[0].isIntersecting) {
+            observer.disconnect();
+            sentinel.remove();
+            loadBatch();
+          }
+        }, { threshold: 0.1 });
+        observer.observe(sentinel);
+      }
+    }
+
+    loadBatch();
   }
 
   async function handleRefreshVideos() {

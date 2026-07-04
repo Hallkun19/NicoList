@@ -755,9 +755,31 @@
     if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
     if (loopObserver) { loopObserver.disconnect(); loopObserver = null; }
 
+    let videoFindTimeout = setTimeout(() => {
+      const video = document.querySelector('video[data-name="video-content"], bwp-video, video');
+      const hasErrorUI = document.querySelector('.ErrorPage, .VideoViewPage-error, .error-message, #common-error-page, .MessageContainer');
+      if (playbackState && playbackState.isPlaying && (!video || hasErrorUI)) {
+        console.log('NicoList: [Watchdog] 5秒間ビデオ要素が見つからない、またはエラー画面を検知したため強制的に次へ遷移します');
+        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
+        clearTimeout(videoFindTimeout);
+        onVideoEnded();
+      }
+    }, 5000);
+
     const attach = () => {
       const video = document.querySelector('video[data-name="video-content"], bwp-video, video');
       if (video) {
+        clearTimeout(videoFindTimeout);
+
+        // Bilibili動画の自動再生キック
+        if (getCurrentSite() === 'bilibili' && playbackState && playbackState.isPlaying) {
+          video.play().catch(err => {
+            console.log('NicoList: Bilibili自動再生ブロック回避のため、クリックイベントを実行します');
+            const playBtn = document.querySelector('.bpx-player-ctrl-play, .bpx-player-video-area');
+            if (playBtn) playBtn.click();
+          });
+        }
+
         // === ループ動画修正: loop属性を強制的にfalseにする ===
         if (video.loop) {
           video.loop = false;
@@ -781,6 +803,7 @@
         // === 提供表示バグ修正: 再生時間監視watchdog ===
         let lastTime = -1;
         let stallCount = 0;
+        let notStartedCount = 0;
         watchdogTimer = setInterval(() => {
           if (!video || video.paused && video.ended) {
             // endedが発火済みの場合はwatchdog不要
@@ -789,6 +812,19 @@
           }
           const ct = video.currentTime;
           const dur = video.duration;
+
+          // 5秒間再生が開始されないタイムアウト
+          if (ct === 0 && video.paused) {
+            notStartedCount++;
+            if (notStartedCount >= 5) {
+              console.log('NicoList: [Watchdog] 5秒間動画が開始されません。強制的に次へ遷移します');
+              clearInterval(watchdogTimer); watchdogTimer = null;
+              onVideoEnded();
+              return;
+            }
+          } else {
+            notStartedCount = 0;
+          }
 
           // ケース1: 動画の末尾近くで停滞している
           if (dur && ct >= dur - 2 && Math.abs(ct - lastTime) < 0.1) {
@@ -1041,6 +1077,14 @@
       }
     });
     urlObserver.observe(document.body, { childList: true, subtree: true });
+
+    // 生存確認タイマー (3秒ごと)
+    setInterval(() => {
+      if (getCurrentVideoId() && !document.getElementById('nicolist-add-btn')) {
+        console.log('NicoList: [Timer] 追加ボタンの消失を検知したため、再挿入を試みます');
+        createAddButtonWithObserver();
+      }
+    }, 3000);
   }
 
   // 連続再生の停止はbackground.jsのtabs.onRemovedで管理

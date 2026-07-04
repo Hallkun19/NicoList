@@ -151,7 +151,7 @@
 
       listsContainer.innerHTML = '';
       for (const list of lists) {
-        const count = await chrome.runtime.sendMessage({ action: 'getVideoCount', listId: list.id });
+        const count = list.videoCount !== undefined ? list.videoCount : 0;
         const item = createListItemElement(list, count);
         listsContainer.appendChild(item);
       }

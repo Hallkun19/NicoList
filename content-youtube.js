@@ -567,9 +567,22 @@
   function attachVideoEndedListener() {
     if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
 
+    let videoFindTimeout = setTimeout(() => {
+      const video = document.querySelector('video.html5-main-video, video');
+      const hasErrorUI = document.querySelector('yt-playability-error-supported-renderers, #error-screen, .yt-playability-error-metadata');
+      if (playbackState && playbackState.isPlaying && (!video || hasErrorUI)) {
+        console.log('NicoList YT: [Watchdog] 5秒間ビデオ要素が見つからない、またはエラー画面を検知したため強制的に次へ遷移します');
+        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
+        clearTimeout(videoFindTimeout);
+        onVideoEnded();
+      }
+    }, 5000);
+
     const attach = () => {
       const video = document.querySelector('video.html5-main-video, video');
       if (video) {
+        clearTimeout(videoFindTimeout);
+
         // ループ解除
         if (video.loop) {
           video.loop = false;
@@ -582,6 +595,7 @@
         // Watchdog
         let lastTime = -1;
         let stallCount = 0;
+        let notStartedCount = 0;
         watchdogTimer = setInterval(() => {
           if (!video || (video.paused && video.ended)) {
             clearInterval(watchdogTimer); watchdogTimer = null;
@@ -589,6 +603,20 @@
           }
           const ct = video.currentTime;
           const dur = video.duration;
+
+          // 5秒間再生が開始されないタイムアウト
+          if (ct === 0 && video.paused) {
+            notStartedCount++;
+            if (notStartedCount >= 5) {
+              console.log('NicoList YT: [Watchdog] 5秒間動画が開始されません。強制的に次へ遷移します');
+              clearInterval(watchdogTimer); watchdogTimer = null;
+              onVideoEnded();
+              return;
+            }
+          } else {
+            notStartedCount = 0;
+          }
+
           if (dur && ct >= dur - 2 && Math.abs(ct - lastTime) < 0.1) {
             stallCount++;
             if (stallCount >= 3) {
@@ -781,6 +809,14 @@
     if (!getCurrentVideoId()) return;
     createAddButtonWithObserver();
     setupPlaybackDetection();
+
+    // 生存確認タイマー (3秒ごと)
+    setInterval(() => {
+      if (getCurrentVideoId() && !document.getElementById('nicolist-add-btn')) {
+        console.log('NicoList YT: [Timer] 追加ボタンの消失を検知したため、再挿入を試みます');
+        createAddButtonWithObserver();
+      }
+    }, 3000);
   }
 
   // YouTube SPAのページ遷移対応

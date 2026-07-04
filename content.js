@@ -750,72 +750,177 @@
   // v2.0: ループ動画バグ修正 + 提供表示バグ修正
   let watchdogTimer = null;
   let loopObserver = null;
+  let scKickInterval = null;
 
   function attachVideoEndedListener() {
     if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
     if (loopObserver) { loopObserver.disconnect(); loopObserver = null; }
+    if (scKickInterval) { clearInterval(scKickInterval); scKickInterval = null; }
+
+    // SoundCloud用の早期再生キックタイマー
+    if (playbackState && playbackState.isPlaying && getCurrentSite() === 'soundcloud') {
+      let scKickAttempted = false;
+      scKickInterval = setInterval(() => {
+        const audio = document.querySelector('audio[src^="blob:"], audio[src], audio');
+        const playBtn = document.querySelector('.heroPlayButton, .playControl, button.playControl, .sc-button-play');
+        if (playBtn) {
+          const isPlayingUI = playBtn.classList.contains('playing') || 
+                              (playBtn.title && playBtn.title.toLowerCase().includes('pause')) || 
+                              (playBtn.getAttribute('aria-label') && playBtn.getAttribute('aria-label').toLowerCase().includes('pause'));
+          if (isPlayingUI || audio) {
+            console.log('NicoList: [SoundCloud] 再生開始を検知したためキックを終了します');
+            clearInterval(scKickInterval);
+            scKickInterval = null;
+            return;
+          }
+          if (!scKickAttempted) {
+            console.log('NicoList: [SoundCloud] 再生キックを実行します(1回のみ)');
+            playBtn.click();
+            scKickAttempted = true; // トグル防止のため1回のみクリック
+          }
+        }
+      }, 500);
+    }
 
     let videoFindTimeout = setTimeout(() => {
-      const video = document.querySelector('video[data-name="video-content"], bwp-video, video');
+      const video = document.querySelector('video[data-name="video-content"], bwp-video, video, audio[src^="blob:"], audio[src], audio');
       const hasErrorUI = document.querySelector('.ErrorPage, .VideoViewPage-error, .error-message, #common-error-page, .MessageContainer');
+      
+      const scPlayBtn = document.querySelector('.playControl, button.playControl, .sc-button-play');
+      const isSCPlaying = getCurrentSite() === 'soundcloud' && scPlayBtn && (
+        scPlayBtn.classList.contains('playing') || 
+        (scPlayBtn.title && scPlayBtn.title.toLowerCase().includes('pause')) || 
+        (scPlayBtn.getAttribute('aria-label') && scPlayBtn.getAttribute('aria-label').toLowerCase().includes('pause'))
+      );
+
       if (playbackState && playbackState.isPlaying && (!video || hasErrorUI)) {
-        console.log('NicoList: [Watchdog] 5秒間ビデオ要素が見つからない、またはエラー画面を検知したため強制的に次へ遷移します');
+        if (isSCPlaying) {
+           console.log('NicoList: [Watchdog] オーディオ要素が見つかりませんが、SoundCloudで再生中UIのためスキップを猶予します');
+           return;
+        }
+        console.log('NicoList: [Watchdog] 5秒間ビデオ/オーディオ要素が見つからない、またはエラー画面を検知したため強制的に次へ遷移します');
         if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
+        if (scKickInterval) { clearInterval(scKickInterval); scKickInterval = null; }
         clearTimeout(videoFindTimeout);
-        onVideoEnded();
+        onVideoEnded(true); // ウォッチドッグからの強制遷移なのでガードをバイパス
       }
     }, 5000);
 
     const attach = () => {
-      const video = document.querySelector('video[data-name="video-content"], bwp-video, video');
-      if (video) {
+      const video = document.querySelector('video[data-name="video-content"], bwp-video, video, audio[src^="blob:"], audio[src], audio');
+      const isSC = getCurrentSite() === 'soundcloud';
+      if (video || isSC) {
         clearTimeout(videoFindTimeout);
+        if (scKickInterval) { clearInterval(scKickInterval); scKickInterval = null; }
 
-        // Bilibili動画の自動再生キック
-        if (getCurrentSite() === 'bilibili' && playbackState && playbackState.isPlaying) {
-          video.play().catch(err => {
-            console.log('NicoList: Bilibili自動再生ブロック回避のため、クリックイベントを実行します');
-            const playBtn = document.querySelector('.bpx-player-ctrl-play, .bpx-player-video-area');
-            if (playBtn) playBtn.click();
-          });
-        }
-
-        // === ループ動画修正: loop属性を強制的にfalseにする ===
-        if (video.loop) {
-          video.loop = false;
-          console.log('NicoList: [Playback] loop属性を強制解除しました');
-        }
-        // MutationObserverでloop属性の再設定を監視
-        loopObserver = new MutationObserver((mutations) => {
-          for (const m of mutations) {
-            if (m.type === 'attributes' && m.attributeName === 'loop' && video.loop) {
-              video.loop = false;
-              console.log('NicoList: [Playback] loop属性の再設定を検知し、再度解除しました');
+        if (video) {
+          // Bilibili/SoundCloudの自動再生キック
+          if (playbackState && playbackState.isPlaying) {
+            if (getCurrentSite() === 'bilibili' || getCurrentSite() === 'soundcloud') {
+              video.play().catch(err => {
+                console.log('NicoList: 自動再生ブロック回避のため、クリックイベントを実行します');
+                const playBtn = document.querySelector('.bpx-player-ctrl-play, .bpx-player-video-area, .heroPlayButton, .playControl, button.playControl, .sc-button-play');
+                if (playBtn) playBtn.click();
+              });
             }
           }
-        });
-        loopObserver.observe(video, { attributes: true, attributeFilter: ['loop'] });
 
-        // === endedイベントリスナー ===
-        video.removeEventListener('ended', onVideoEnded);
-        video.addEventListener('ended', onVideoEnded, { once: true });
+          // === ループ動画修正: loop属性を強制的にfalseにする ===
+          if (video.loop) {
+            video.loop = false;
+            console.log('NicoList: [Playback] loop属性を強制解除しました');
+          }
+          // MutationObserverでloop属性の再設定を監視
+          loopObserver = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+              if (m.type === 'attributes' && m.attributeName === 'loop' && video.loop) {
+                video.loop = false;
+                console.log('NicoList: [Playback] loop属性の再設定を検知し、再度解除しました');
+              }
+            }
+          });
+          loopObserver.observe(video, { attributes: true, attributeFilter: ['loop'] });
+
+          // === endedイベントリスナー ===
+          video.removeEventListener('ended', onVideoEnded);
+          video.addEventListener('ended', onVideoEnded, { once: true });
+        }
 
         // === 提供表示バグ修正: 再生時間監視watchdog ===
         let lastTime = -1;
         let stallCount = 0;
         let notStartedCount = 0;
+        let maxReachedTime = 0; // SoundCloud用：どこまで再生されたかの記録
         watchdogTimer = setInterval(() => {
-          if (!video || video.paused && video.ended) {
-            // endedが発火済みの場合はwatchdog不要
-            clearInterval(watchdogTimer); watchdogTimer = null;
-            return;
+          // SoundCloud用のUIベース終了検知フォールバック (最優先)
+          if (getCurrentSite() === 'soundcloud') {
+            const passedEl = document.querySelector('.playControls .playbackTimeline__timePassed');
+            const durationEl = document.querySelector('.playControls .playbackTimeline__duration');
+            if (passedEl && durationEl) {
+              const pMatch = passedEl.textContent.match(/(\d+):(\d+)/);
+              const dMatch = durationEl.textContent.match(/(\d+):(\d+)/);
+              if (pMatch && dMatch) {
+                const pSec = parseInt(pMatch[1], 10) * 60 + parseInt(pMatch[2], 10);
+                const dSec = parseInt(dMatch[1], 10) * 60 + parseInt(dMatch[2], 10);
+                const playBtn = document.querySelector('.playControls .playControl');
+                const isPlaying = playBtn && playBtn.classList.contains('playing');
+                
+                if (pSec > maxReachedTime) {
+                  maxReachedTime = pSec;
+                }
+
+                let isEnded = (dSec > 0 && ((pSec === dSec) || (pSec >= dSec - 2 && !isPlaying)));
+                
+                // 一時停止マークが消えた瞬間に、経過時間が0:00~0:02に戻った場合 (SoundCloud独自の次の曲が始まったと検知)
+                // 再生直後に手動で止めた場合と区別するため、一度でも3秒以上再生されたことを条件とする
+                if (!isPlaying && pSec <= 2 && maxReachedTime > 3) {
+                  isEnded = true;
+                }
+
+                // 念のため、再生中のままでも曲の末尾近くまで再生された後に時間がリセットされた場合は終了とみなす
+                if (pSec <= 2 && maxReachedTime >= dSec - 5 && dSec > 0) {
+                  isEnded = true;
+                }
+
+                if (isEnded) {
+                  console.log(`NicoList: [SoundCloud] UI表示上で再生終了・切り替わりを検知しました (${pMatch[0]} / ${dMatch[0]})`);
+                  clearInterval(watchdogTimer); watchdogTimer = null;
+                  onVideoEnded(true); // forceSkip = true でガードをバイパス
+                  return;
+                }
+              }
+            }
           }
-          const ct = video.currentTime;
-          const dur = video.duration;
+
+          // 最新のvideo/audio要素を再取得
+          const currentVideo = document.querySelector('video[data-name="video-content"], bwp-video, video, audio[src^="blob:"], audio[src], audio');
+          if (!currentVideo || (currentVideo.paused && currentVideo.ended)) {
+            if (getCurrentSite() === 'soundcloud') {
+              return; // SoundCloudの場合はUI監視を継続するためタイマーを止めない
+            } else {
+              clearInterval(watchdogTimer); watchdogTimer = null;
+              return;
+            }
+          }
+
+          const ct = currentVideo.currentTime;
+          const dur = currentVideo.duration;
+
+          const playBtn = document.querySelector('.heroPlayButton, .playControl, button.playControl, .sc-button-play, .bpx-player-ctrl-play, .bpx-player-video-area');
+          const isPlayingUI = playBtn && (
+            playBtn.classList.contains('playing') || 
+            (playBtn.title && playBtn.title.toLowerCase().includes('pause')) || 
+            (playBtn.getAttribute('aria-label') && playBtn.getAttribute('aria-label').toLowerCase().includes('pause')) ||
+            playBtn.classList.contains('bpx-state-paused') === false
+          );
 
           // 5秒間再生が開始されないタイムアウト
           if (ct === 0 && video.paused) {
-            notStartedCount++;
+            if (isPlayingUI) {
+              notStartedCount = 0; // UI上再生中なら猶予
+            } else {
+              notStartedCount++;
+            }
             if (notStartedCount >= 5) {
               console.log('NicoList: [Watchdog] 5秒間動画が開始されません。強制的に次へ遷移します');
               clearInterval(watchdogTimer); watchdogTimer = null;
@@ -827,7 +932,8 @@
           }
 
           // ケース1: 動画の末尾近くで停滞している
-          if (dur && ct >= dur - 2 && Math.abs(ct - lastTime) < 0.1) {
+          // (SoundCloudの場合ダミーaudioのdurationによる誤爆を防ぐため、再生中UIなら停滞と見なさない)
+          if (dur && ct >= dur - 2 && Math.abs(ct - lastTime) < 0.1 && !isPlayingUI) {
             stallCount++;
             if (stallCount >= 3) {
               console.log('NicoList: [Watchdog] 動画末尾で停滞を検知、強制的に次へ遷移します');
@@ -840,7 +946,7 @@
           }
 
           // ケース2: 一時停止状態が異常に長い(paused && !ended)
-          if (video.paused && !video.ended && dur && ct >= dur - 3) {
+          if (video.paused && !video.ended && dur && ct >= dur - 3 && !isPlayingUI) {
             stallCount += 2;
             if (stallCount >= 5) {
               console.log('NicoList: [Watchdog] paused状態で末尾付近、強制的に次へ遷移します');
@@ -883,7 +989,25 @@
     }
   }
 
-  async function onVideoEnded() {
+  async function onVideoEnded(forceSkip = false) {
+    // 誤発火防止: 再生開始から5秒未満、かつSoundCloudで再生中UIである場合はスキップを無視する
+    // ただし forceSkip === true (ウォッチドッグなどからの明示的な終了判定) の場合はガードをバイパスする
+    const video = document.querySelector('video[data-name="video-content"], bwp-video, video, audio[src^="blob:"], audio[src], audio');
+    if (!forceSkip && video && getCurrentSite() === 'soundcloud') {
+      const scPlayBtn = document.querySelector('.playControl, button.playControl');
+      const isSCPlaying = scPlayBtn && (
+        scPlayBtn.classList.contains('playing') || 
+        (scPlayBtn.title && scPlayBtn.title.toLowerCase().includes('pause')) ||
+        (scPlayBtn.getAttribute('aria-label') && scPlayBtn.getAttribute('aria-label').toLowerCase().includes('pause'))
+      );
+      if (video.currentTime < 5 && isSCPlaying) {
+        console.log('NicoList: [ended] 5秒未満でのendedイベント誤検出を無視します (currentTime:', video.currentTime, ')');
+        video.removeEventListener('ended', onVideoEnded);
+        video.addEventListener('ended', () => onVideoEnded(false), { once: true });
+        return;
+      }
+    }
+
     if (cachedNextUrl) {
       location.href = cachedNextUrl;
     } else {
@@ -1053,11 +1177,6 @@
   //  初期化 (URL変更検知)
   // ═════════════════════════════════════════════════════════
   function init() {
-    if (!getCurrentVideoId()) return;
-
-    createAddButtonWithObserver();
-    setupPlaybackDetection();
-
     let lastUrl = location.href;
     const urlObserver = new MutationObserver(() => {
       if (location.href !== lastUrl) {
@@ -1069,6 +1188,7 @@
         if (insertionInterval) clearInterval(insertionInterval);
         if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
         if (loopObserver) { loopObserver.disconnect(); loopObserver = null; }
+        if (scKickInterval) { clearInterval(scKickInterval); scKickInterval = null; }
 
         if (getCurrentVideoId()) {
           createAddButtonWithObserver();
@@ -1085,6 +1205,12 @@
         createAddButtonWithObserver();
       }
     }, 3000);
+
+    // 初回ロード時に動画ページだった場合の実行
+    if (getCurrentVideoId()) {
+      createAddButtonWithObserver();
+      setupPlaybackDetection();
+    }
   }
 
   // 連続再生の停止はbackground.jsのtabs.onRemovedで管理

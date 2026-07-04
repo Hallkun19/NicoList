@@ -280,7 +280,7 @@
       `;
       applyTheme();
 
-      btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>リスト`;
+      btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>リストに追加`;
       btn.addEventListener('mouseenter', () => {
         btn.style.background = isDark() ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
       });
@@ -806,10 +806,6 @@
   //  初期化 (YouTube SPA対応)
   // ═════════════════════════════════════════════════════════
   function init() {
-    if (!getCurrentVideoId()) return;
-    createAddButtonWithObserver();
-    setupPlaybackDetection();
-
     // 生存確認タイマー (3秒ごと)
     setInterval(() => {
       if (getCurrentVideoId() && !document.getElementById('nicolist-add-btn')) {
@@ -817,6 +813,12 @@
         createAddButtonWithObserver();
       }
     }, 3000);
+
+    // 初回ロード時に動画ページだった場合の実行
+    if (getCurrentVideoId()) {
+      createAddButtonWithObserver();
+      setupPlaybackDetection();
+    }
   }
 
   // YouTube SPAのページ遷移対応

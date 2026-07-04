@@ -177,7 +177,7 @@ async function handleMessage(msg, sender) {
 
     // ─── 連続再生 ─────────────────────────────
     case 'startPlayback': return await startPlayback(msg.listId, msg.sortKey, msg.sortOrder, msg.shuffle, msg.startIndex);
-    case 'getPlaybackState': return await getPlaybackState();
+    case 'getPlaybackState': return await getPlaybackState(sender);
     case 'playNext': return await playNext();
     case 'stopPlayback': return await stopPlayback();
     case 'jumpToPlayback': return await jumpToPlayback(msg.index);
@@ -331,7 +331,7 @@ function buildWatchUrl(videoId, site) {
 }
 
 async function startPlayback(listId, sortKey = 'addedAt', sortOrder = 'desc', shuffle = false, startIndex = 0) {
-  const videos = await getVideos(listId, sortKey, sortOrder);
+  const videos = await nicoListStorage.getVideos(listId, sortKey, sortOrder);
   if (!videos || videos.length === 0) {
     return { success: false, message: 'リストに動画がありません' };
   }
@@ -371,10 +371,15 @@ async function startPlayback(listId, sortKey = 'addedAt', sortOrder = 'desc', sh
   return { success: true, totalVideos: queue.length };
 }
 
-async function getPlaybackState() {
+async function getPlaybackState(sender) {
   const result = await chrome.storage.local.get('playbackState');
   const state = result.playbackState || null;
+  
   if (state && state.isPlaying) {
+    if (sender && sender.tab && state.tabId && sender.tab.id !== state.tabId) {
+      return { isPlaying: false }; // 別タブの場合は再生中ではないものとして返す
+    }
+    
     const nextIndex = state.currentIndex + 1;
     if (nextIndex < state.queue.length) {
       const next = state.queue[nextIndex];
@@ -728,7 +733,19 @@ async function fetchSoundCloudVideoInfo(urlPath) {
     const oembedRes = await fetch(`https://soundcloud.com/oembed?url=${encodeURIComponent(fullUrl)}&format=json`);
     if (oembedRes.ok) {
       const oembedData = await oembedRes.json();
-      info.title = oembedData.title || info.title;
+      if (oembedData.title) {
+        let t = oembedData.title;
+        const authorName = oembedData.author_name;
+        if (authorName && t.endsWith(` by ${authorName}`)) {
+          t = t.substring(0, t.length - ` by ${authorName}`.length);
+        } else {
+          const idx = t.lastIndexOf(' by ');
+          if (idx !== -1) {
+            t = t.substring(0, idx);
+          }
+        }
+        info.title = t.trim() || oembedData.title;
+      }
       info.thumbnailUrl = oembedData.thumbnail_url || info.thumbnailUrl;
       info.ownerName = oembedData.author_name || info.ownerName;
       info.description = oembedData.description || info.description;

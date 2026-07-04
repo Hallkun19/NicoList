@@ -509,16 +509,20 @@
   async function bindAddBtnEvents(btn) {
     const settings = await chrome.runtime.sendMessage({ action: 'getSettings' }) || {};
     const quickAddMode = settings.quickAddMode || 'dblclick';
+    let clickTimer = null;
 
     if (quickAddMode === 'click') {
       // クリック即追加モード: click → 即追加、dblclick → モーダル
-      let clickTimer = null;
       btn.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
-        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
+        if (clickTimer) {
+          clearTimeout(clickTimer);
+          clickTimer = null;
+          return;
+        }
         clickTimer = setTimeout(() => {
           clickTimer = null;
-          handleDoubleClickAdd(); // 即追加（名前は旧来のまま）
+          handleDoubleClickAdd(); // 即追加
         }, 250);
       });
       btn.addEventListener('dblclick', (e) => {
@@ -530,13 +534,22 @@
       // ダブルクリック即追加モード（デフォルト）: click → モーダル、dblclick → 即追加
       btn.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
-        const now = Date.now();
-        if (now - lastModalOpenTime < 400) return;
-        lastModalOpenTime = now;
-        openModal();
+        if (clickTimer) {
+          clearTimeout(clickTimer);
+          clickTimer = null;
+          return;
+        }
+        clickTimer = setTimeout(() => {
+          clickTimer = null;
+          const now = Date.now();
+          if (now - lastModalOpenTime < 400) return;
+          lastModalOpenTime = now;
+          openModal();
+        }, 250);
       });
       btn.addEventListener('dblclick', (e) => {
         e.preventDefault(); e.stopPropagation();
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
         closeModal();
         handleDoubleClickAdd();
       });

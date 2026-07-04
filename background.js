@@ -10,10 +10,7 @@
  * - YouTube: ページHTML解析 → oEmbed フォールバック
  */
 
-// ─── IndexedDB 定義 ─────────────────────────────────────
-
-const DB_NAME = 'NicoListDB';
-const DB_VERSION = 2;
+import './storage.js';
 
 // ═════════════════════════════════════════════════════════════
 //  Update Notifier (GitHub API)
@@ -75,53 +72,6 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'checkUpdateAlarm') checkForUpdates();
 });
-
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      const oldVersion = event.oldVersion;
-
-      // v1
-      if (!db.objectStoreNames.contains('lists')) {
-        const listStore = db.createObjectStore('lists', { keyPath: 'id' });
-        listStore.createIndex('name', 'name', { unique: false });
-        listStore.createIndex('createdAt', 'createdAt', { unique: false });
-      }
-      if (!db.objectStoreNames.contains('videos')) {
-        const videoStore = db.createObjectStore('videos', { keyPath: 'id' });
-        videoStore.createIndex('listId', 'listId', { unique: false });
-        videoStore.createIndex('videoId', 'videoId', { unique: false });
-        videoStore.createIndex('listId_videoId', ['listId', 'videoId'], { unique: true });
-        videoStore.createIndex('addedAt', 'addedAt', { unique: false });
-        videoStore.createIndex('postedAt', 'postedAt', { unique: false });
-        videoStore.createIndex('viewCount', 'viewCount', { unique: false });
-        videoStore.createIndex('mylistCount', 'mylistCount', { unique: false });
-      }
-
-      // v2 (v1からの更新)
-      if (oldVersion < 2) {
-        if (db.objectStoreNames.contains('videos')) {
-          const videoStore = event.target.transaction.objectStore('videos');
-          if (!videoStore.indexNames.contains('likeCount')) {
-            videoStore.createIndex('likeCount', 'likeCount', { unique: false });
-          }
-        }
-      }
-    };
-    request.onsuccess = (event) => resolve(event.target.result);
-    request.onerror = (event) => reject(event.target.error);
-  });
-}
-
-function generateId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 // ─── キャッシュ機能 (chrome.storage.local) ────────────────
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24時間
@@ -211,19 +161,19 @@ async function handleMessage(msg, sender) {
     // ─── リスト操作 ─────────────────────────────
     case 'createList': return await createList(msg.name);
     case 'getAllLists': return await getAllLists();
-    case 'getList': return await getList(msg.id);
-    case 'updateListName': return await updateListName(msg.id, msg.name);
-    case 'updateListShareId': return await updateListShareId(msg.id, msg.shareId);
+    case 'getList': return await nicoListStorage.getList(msg.id);
+    case 'updateListName': return await nicoListStorage.updateListName(msg.id, msg.name);
+    case 'updateListShareId': return await nicoListStorage.updateListShareId(msg.id, msg.shareId);
     case 'deleteList': return await deleteList(msg.id);
     case 'saveListOrder': return await saveListOrder(msg.order);
 
     // ─── 動画操作 ─────────────────────────────
     case 'addVideo': return await addVideo(msg.listId, msg.videoInfo);
-    case 'getVideos': return await getVideos(msg.listId, msg.sortKey, msg.sortOrder);
-    case 'getVideoCount': return await getVideoCount(msg.listId);
-    case 'removeVideo': return await removeVideo(msg.videoDbId);
-    case 'updateVideoMemo': return await updateVideoMemo(msg.videoDbId, msg.memo);
-    case 'isVideoInList': return await isVideoInList(msg.listId, msg.videoId);
+    case 'getVideos': return await nicoListStorage.getVideos(msg.listId, msg.sortKey, msg.sortOrder);
+    case 'getVideoCount': return await nicoListStorage.getVideoCount(msg.listId);
+    case 'removeVideo': return await nicoListStorage.removeVideo(msg.videoDbId);
+    case 'updateVideoMemo': return await nicoListStorage.updateVideoMemo(msg.videoDbId, msg.memo);
+    case 'isVideoInList': return await nicoListStorage.isVideoInList(msg.listId, msg.videoId);
 
     // ─── 連続再生 ─────────────────────────────
     case 'startPlayback': return await startPlayback(msg.listId, msg.sortKey, msg.sortOrder, msg.shuffle, msg.startIndex);
@@ -276,32 +226,24 @@ async function handleMessage(msg, sender) {
 // ═════════════════════════════════════════════════════════════
 
 async function createList(name) {
-  const db = await openDB();
-  const now = Date.now();
-  const list = { id: generateId(), name, createdAt: now, updatedAt: now };
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('lists', 'readwrite');
-    tx.objectStore('lists').add(list);
-    tx.oncomplete = () => {
-      // オーダーの末尾に追加
+  try {
+    const list = await nicoListStorage.createList(name);
+    return new Promise((resolve) => {
       chrome.storage.local.get(['listOrder'], (res) => {
         const order = res.listOrder || [];
         order.push(list.id);
         chrome.storage.local.set({ listOrder: order }, () => resolve(list));
       });
-    };
-    tx.onerror = () => reject(new Error('リスト作成失敗'));
-  });
+    });
+  } catch (e) {
+    throw new Error('リスト作成失敗');
+  }
 }
 
 async function getAllLists() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('lists', 'readonly');
-    const req = tx.objectStore('lists').getAll();
-    req.onsuccess = () => {
-      let lists = req.result;
-      // カスタムオーダーがあれば並び替え
+  try {
+    const lists = await nicoListStorage.getAllLists();
+    return new Promise((resolve) => {
       chrome.storage.local.get(['listOrder'], (res) => {
         if (res.listOrder && res.listOrder.length > 0) {
           const orderMap = new Map();
@@ -312,74 +254,19 @@ async function getAllLists() {
             if (idxA !== idxB) return idxA - idxB;
             return b.createdAt - a.createdAt; // フォールバックは日付降順
           });
-        } else {
-          lists.sort((a, b) => b.createdAt - a.createdAt);
         }
         resolve(lists);
       });
-    };
-    req.onerror = () => reject(new Error('リスト取得失敗'));
-  });
-}
-
-async function getList(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('lists', 'readonly');
-    const req = tx.objectStore('lists').get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(new Error('リスト取得失敗'));
-  });
-}
-
-async function updateListName(id, newName) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('lists', 'readwrite');
-    const store = tx.objectStore('lists');
-    const getReq = store.get(id);
-    getReq.onsuccess = () => {
-      const list = getReq.result;
-      if (!list) return reject(new Error('見つかりません'));
-      list.name = newName;
-      list.updatedAt = Date.now();
-      store.put(list);
-    };
-    tx.oncomplete = () => resolve({ success: true });
-    tx.onerror = () => reject(new Error('リスト更新失敗'));
-  });
-}
-
-async function updateListShareId(id, shareId) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('lists', 'readwrite');
-    const store = tx.objectStore('lists');
-    const getReq = store.get(id);
-    getReq.onsuccess = () => {
-      const list = getReq.result;
-      if (!list) return reject(new Error('見つかりません'));
-      list.shareId = shareId;
-      store.put(list);
-    };
-    tx.oncomplete = () => resolve({ success: true });
-    tx.onerror = () => reject(new Error('リスト共有ID更新失敗'));
-  });
+    });
+  } catch (e) {
+    throw new Error('リスト取得失敗');
+  }
 }
 
 async function deleteList(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(['lists', 'videos'], 'readwrite');
-    tx.objectStore('lists').delete(id);
-    const videoStore = tx.objectStore('videos');
-    const index = videoStore.index('listId');
-    const cursor = index.openCursor(IDBKeyRange.only(id));
-    cursor.onsuccess = (e) => {
-      const c = e.target.result;
-      if (c) { c.delete(); c.continue(); }
-    };
-    tx.oncomplete = () => {
+  try {
+    await nicoListStorage.deleteList(id);
+    return new Promise((resolve) => {
       chrome.storage.local.get(['listOrder'], (res) => {
         if (res.listOrder) {
           const order = res.listOrder.filter(lid => lid !== id);
@@ -388,9 +275,10 @@ async function deleteList(id) {
           resolve({ success: true });
         }
       });
-    };
-    tx.onerror = () => reject(new Error('リスト削除失敗'));
-  });
+    });
+  } catch (e) {
+    throw new Error('リスト削除失敗');
+  }
 }
 
 async function saveListOrder(order) {
@@ -403,13 +291,12 @@ async function saveListOrder(order) {
 // ═════════════════════════════════════════════════════════════
 
 async function addVideo(listId, videoInfo) {
-  const db = await openDB();
-  const exists = await isVideoInList(listId, videoInfo.videoId);
+  const exists = await nicoListStorage.isVideoInList(listId, videoInfo.videoId);
   if (exists) return { success: false, message: 'この動画は既に追加されています' };
 
   let finalInfo = { ...videoInfo };
 
-  // ★ 改善: ニコニコ動画でいいね数が0（または不足）の場合、バックグラウンドで最新情報を取得し直す
+  // ニコニコ動画でいいね数が0（または不足）の場合、バックグラウンドで最新情報を取得し直す
   if (finalInfo.site === 'niconico' && (finalInfo.likeCount === 0 || !finalInfo.ownerName)) {
     try {
       console.log(`NicoList [BG]: ss動画等の不足情報を補完中... (${finalInfo.videoId})`);
@@ -421,7 +308,7 @@ async function addVideo(listId, videoInfo) {
         finalInfo.mylistCount = Math.max(finalInfo.mylistCount, fresh.mylistCount);
         finalInfo.likeCount = Math.max(finalInfo.likeCount, fresh.likeCount);
         finalInfo.ownerName = finalInfo.ownerName || fresh.ownerName;
-        finalInfo.ownerIcon = finalInfo.ownerIcon || fresh.ownerIcon;
+        finalInfo.ownerIcon = fresh.ownerIcon || fresh.ownerIcon;
         finalInfo.description = finalInfo.description || fresh.description;
       }
     } catch (e) {
@@ -429,107 +316,7 @@ async function addVideo(listId, videoInfo) {
     }
   }
 
-  const video = {
-    id: generateId(),
-    listId,
-    videoId: finalInfo.videoId,
-    title: finalInfo.title || '',
-    thumbnailUrl: finalInfo.thumbnailUrl || '',
-    viewCount: finalInfo.viewCount || 0,
-    mylistCount: finalInfo.mylistCount || 0,
-    likeCount: finalInfo.likeCount || 0,
-    postedAt: finalInfo.postedAt || 0,
-    addedAt: finalInfo.addedAt || Date.now(),
-    ownerName: finalInfo.ownerName || '',
-    ownerIcon: finalInfo.ownerIcon || '',
-    description: finalInfo.description || '',
-    site: finalInfo.site || 'niconico'
-  };
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(['videos', 'lists'], 'readwrite');
-    tx.objectStore('videos').add(video);
-    const listStore = tx.objectStore('lists');
-    const getReq = listStore.get(listId);
-    getReq.onsuccess = () => {
-      const list = getReq.result;
-      if (list) { list.updatedAt = Date.now(); listStore.put(list); }
-    };
-    tx.oncomplete = () => resolve({ success: true, video });
-    tx.onerror = () => reject(new Error('動画追加失敗'));
-  });
-}
-
-async function getVideos(listId, sortKey = 'addedAt', sortOrder = 'desc') {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('videos', 'readonly');
-    const index = tx.objectStore('videos').index('listId');
-    const req = index.getAll(IDBKeyRange.only(listId));
-    req.onsuccess = () => {
-      let videos = req.result;
-      videos.sort((a, b) => {
-        const valA = a[sortKey] || 0;
-        const valB = b[sortKey] || 0;
-        return sortOrder === 'asc' ? valA - valB : valB - valA;
-      });
-      resolve(videos);
-    };
-    req.onerror = () => reject(new Error('動画取得失敗'));
-  });
-}
-
-async function getVideoCount(listId) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('videos', 'readonly');
-    const index = tx.objectStore('videos').index('listId');
-    const req = index.count(IDBKeyRange.only(listId));
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(new Error('動画数取得失敗'));
-  });
-}
-
-async function isVideoInList(listId, videoId) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('videos', 'readonly');
-    const index = tx.objectStore('videos').index('listId_videoId');
-    const req = index.get([listId, videoId]);
-    req.onsuccess = () => resolve(!!req.result);
-    req.onerror = () => reject(new Error('重複チェック失敗'));
-  });
-}
-
-async function updateVideoMemo(videoDbId, memo) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('videos', 'readwrite');
-    const store = tx.objectStore('videos');
-    const getReq = store.get(videoDbId);
-    getReq.onsuccess = () => {
-      const video = getReq.result;
-      if (!video) {
-        reject(new Error('動画が見つかりません'));
-        return;
-      }
-      video.memo = memo;
-      const putReq = store.put(video);
-      putReq.onsuccess = () => resolve({ success: true });
-      putReq.onerror = () => reject(new Error('メモの更新に失敗'));
-    };
-    getReq.onerror = () => reject(new Error('動画の取得に失敗'));
-  });
-}
-
-async function removeVideo(videoDbId) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('videos', 'readwrite');
-    tx.objectStore('videos').delete(videoDbId);
-    tx.oncomplete = () => resolve({ success: true });
-    tx.onerror = () => reject(new Error('動画削除失敗'));
-  });
+  return await nicoListStorage.addVideo(listId, finalInfo);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -645,48 +432,33 @@ async function stopPlayback() {
 // ═════════════════════════════════════════════════════════════
 
 async function exportAll() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(['lists', 'videos'], 'readonly');
-    const listsReq = tx.objectStore('lists').getAll();
-    const videosReq = tx.objectStore('videos').getAll();
-    tx.oncomplete = () => {
+  try {
+    const data = await nicoListStorage.exportAll();
+    return new Promise((resolve) => {
       chrome.storage.local.get('listOrder', (res) => {
-        resolve({
-          version: 2,
-          exportedAt: new Date().toISOString(),
-          lists: listsReq.result,
-          videos: videosReq.result,
-          listOrder: res.listOrder || []
-        });
+        data.listOrder = res.listOrder || [];
+        resolve(data);
       });
-    };
-    tx.onerror = () => reject(new Error('エクスポート失敗'));
-  });
+    });
+  } catch (e) {
+    throw new Error('エクスポート失敗');
+  }
 }
 
 async function importData(data, overwrite = false) {
-  const db = await openDB();
-  if (!data || !data.lists || !data.videos) throw new Error('無効なデータ');
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(['lists', 'videos'], 'readwrite');
-    const listStore = tx.objectStore('lists');
-    const videoStore = tx.objectStore('videos');
-    if (overwrite) { listStore.clear(); videoStore.clear(); }
-    let listsAdded = 0, videosAdded = 0;
-    for (const list of data.lists) { listStore.put(list); listsAdded++; }
-    for (const video of data.videos) { videoStore.put(video); videosAdded++; }
-    tx.oncomplete = () => {
-      if (data.listOrder && overwrite) {
+  try {
+    const res = await nicoListStorage.importData(data, overwrite);
+    if (data.listOrder && overwrite) {
+      return new Promise((resolve) => {
         chrome.storage.local.set({ listOrder: data.listOrder }, () => {
-          resolve({ success: true, listsAdded, videosAdded });
+          resolve(res);
         });
-      } else {
-        resolve({ success: true, listsAdded, videosAdded });
-      }
-    };
-    tx.onerror = () => reject(new Error('インポート失敗'));
-  });
+      });
+    }
+    return res;
+  } catch (e) {
+    throw new Error('インポート失敗');
+  }
 }
 
 function unifyThumb(url) {
@@ -1122,46 +894,79 @@ async function fetchYouTubeVideoInfo(videoId) {
 // ═════════════════════════════════════════════════════════════════
 
 async function refreshVideos(listId) {
-  const db = await openDB();
-  const videos = await new Promise((resolve, reject) => {
-    const tx = db.transaction('videos', 'readonly');
-    const index = tx.objectStore('videos').index('listId');
-    const req = index.getAll(listId);
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-
+  const videos = await nicoListStorage.getVideos(listId, 'addedAt', 'desc');
   let updated = 0;
   const chunkSize = 5;
+
   for (let i = 0; i < videos.length; i += chunkSize) {
     const chunk = videos.slice(i, i + chunkSize);
-    await Promise.all(chunk.map(async (video) => {
+    
+    const freshInfos = await Promise.all(chunk.map(async (video) => {
       try {
         const site = video.site || (video.videoId?.startsWith('sm') || video.videoId?.startsWith('ss') || video.videoId?.startsWith('nm') ? 'niconico' : 'youtube');
         const info = await cachedFetchVideoInfo(video.videoId, site, true); // forceRefresh
         if (info && !info.error) {
-          // DB内の動画データを更新
-          const db2 = await openDB();
-          const tx = db2.transaction('videos', 'readwrite');
-          const store = tx.objectStore('videos');
-          const existing = await new Promise(r => { const req = store.get(video.id); req.onsuccess = () => r(req.result); });
-          if (existing) {
-            existing.title = info.title || existing.title;
-            existing.thumbnailUrl = info.thumbnailUrl || existing.thumbnailUrl;
-            existing.viewCount = info.viewCount ?? existing.viewCount;
-            existing.likeCount = info.likeCount ?? existing.likeCount;
-            existing.mylistCount = info.mylistCount ?? existing.mylistCount;
-            existing.postedAt = info.postedAt || existing.postedAt;
-            existing.ownerName = info.ownerName || existing.ownerName;
-            existing.ownerIcon = info.ownerIcon || existing.ownerIcon;
-            store.put(existing);
-            updated++;
-          }
+          return { video, info };
         }
-      } catch (e) { console.warn('NicoList: refreshVideos error', video.videoId, e); }
+      } catch (e) {
+        console.warn('NicoList: refreshVideos fetch error', video.videoId, e);
+      }
+      return null;
     }));
+
+    const validFresh = freshInfos.filter(x => x !== null);
+    if (validFresh.length > 0) {
+      try {
+        const db = await nicoListStorage.open();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction('videos', 'readwrite');
+          const store = tx.objectStore('videos');
+
+          tx.oncomplete = () => resolve();
+          tx.onerror = (e) => reject(e.target.error);
+
+          for (const { video, info } of validFresh) {
+            const getReq = store.get(video.id);
+            getReq.onsuccess = () => {
+              const existing = getReq.result;
+              if (existing) {
+                existing.title = info.title || existing.title;
+                existing.thumbnailUrl = info.thumbnailUrl || existing.thumbnailUrl;
+                
+                // データ破壊防止マージ処理: oEmbedフォールバック等で0が返ってきた場合に、既存の正しいデータを破壊するのを防ぐ
+                if (info.viewCount !== undefined && (info.viewCount > 0 || !existing.viewCount)) {
+                  existing.viewCount = info.viewCount;
+                }
+                if (info.likeCount !== undefined && (info.likeCount > 0 || !existing.likeCount)) {
+                  existing.likeCount = info.likeCount;
+                }
+                if (info.mylistCount !== undefined && (info.mylistCount >= 0 || existing.mylistCount === undefined)) {
+                  if (info.mylistCount >= 0 || (info.mylistCount === -1 && existing.mylistCount === undefined)) {
+                    existing.mylistCount = info.mylistCount;
+                  }
+                }
+                if (info.postedAt && (info.postedAt > 0 || !existing.postedAt)) {
+                  existing.postedAt = info.postedAt;
+                }
+
+                existing.ownerName = info.ownerName || existing.ownerName;
+                existing.ownerIcon = info.ownerIcon || existing.ownerIcon;
+                
+                store.put(existing);
+                updated++;
+              }
+            };
+          }
+        });
+      } catch (err) {
+        console.warn('NicoList: refreshVideos DB write error', err);
+      }
+    }
+
     // API負荷軽減
-    if (i + chunkSize < videos.length) await new Promise(r => setTimeout(r, 300));
+    if (i + chunkSize < videos.length) {
+      await new Promise(r => setTimeout(r, 300));
+    }
   }
   return { success: true, updated, total: videos.length };
 }

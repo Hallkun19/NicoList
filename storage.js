@@ -33,6 +33,7 @@ class NicoListStorage {
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
         const oldVersion = event.oldVersion;
+        let videoStore;
 
         // v1: 基本構造
         if (!db.objectStoreNames.contains('lists')) {
@@ -42,7 +43,7 @@ class NicoListStorage {
         }
 
         if (!db.objectStoreNames.contains('videos')) {
-          const videoStore = db.createObjectStore('videos', { keyPath: 'id' });
+          videoStore = db.createObjectStore('videos', { keyPath: 'id' });
           videoStore.createIndex('listId', 'listId', { unique: false });
           videoStore.createIndex('videoId', 'videoId', { unique: false });
           videoStore.createIndex('listId_videoId', ['listId', 'videoId'], { unique: true });
@@ -50,15 +51,14 @@ class NicoListStorage {
           videoStore.createIndex('postedAt', 'postedAt', { unique: false });
           videoStore.createIndex('viewCount', 'viewCount', { unique: false });
           videoStore.createIndex('mylistCount', 'mylistCount', { unique: false });
+        } else {
+          videoStore = event.target.transaction.objectStore('videos');
         }
 
         // v2: likeCountインデックス追加
         if (oldVersion < 2) {
-          if (db.objectStoreNames.contains('videos')) {
-            const videoStore = event.target.transaction.objectStore('videos');
-            if (!videoStore.indexNames.contains('likeCount')) {
-              videoStore.createIndex('likeCount', 'likeCount', { unique: false });
-            }
+          if (videoStore && !videoStore.indexNames.contains('likeCount')) {
+            videoStore.createIndex('likeCount', 'likeCount', { unique: false });
           }
         }
       };
@@ -167,6 +167,32 @@ class NicoListStorage {
       };
       tx.oncomplete = () => resolve({ success: true });
       tx.onerror = (e) => reject(new Error('リスト更新失敗: ' + e.target.error));
+    });
+  }
+
+  /**
+   * リストの共有IDを更新する
+   * @param {string} id - リストID
+   * @param {string} shareId - 共有ID
+   * @returns {Promise<object>}
+   */
+  async updateListShareId(id, shareId) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('lists', 'readwrite');
+      const store = tx.objectStore('lists');
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const list = getReq.result;
+        if (!list) {
+          reject(new Error('リストが見つかりません'));
+          return;
+        }
+        list.shareId = shareId;
+        store.put(list);
+      };
+      tx.oncomplete = () => resolve({ success: true });
+      tx.onerror = (e) => reject(new Error('リスト共有ID更新失敗: ' + e.target.error));
     });
   }
 
@@ -338,6 +364,33 @@ class NicoListStorage {
     });
   }
 
+  /**
+   * 動画のメモを更新する
+   * @param {string} videoDbId - 動画のDB内ID
+   * @param {string} memo - 新しいメモ内容
+   * @returns {Promise<object>}
+   */
+  async updateVideoMemo(videoDbId, memo) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('videos', 'readwrite');
+      const store = tx.objectStore('videos');
+      const getReq = store.get(videoDbId);
+      getReq.onsuccess = () => {
+        const video = getReq.result;
+        if (!video) {
+          reject(new Error('動画が見つかりません'));
+          return;
+        }
+        video.memo = memo;
+        const putReq = store.put(video);
+        putReq.onsuccess = () => resolve({ success: true });
+        putReq.onerror = () => reject(new Error('メモの更新に失敗'));
+      };
+      getReq.onerror = (e) => reject(new Error('動画の取得に失敗: ' + e.target.error));
+    });
+  }
+
   // ═════════════════════════════════════════════════════════
   //  インポート / エクスポート
   // ═════════════════════════════════════════════════════════
@@ -417,7 +470,6 @@ class NicoListStorage {
 }
 
 // グローバルにインスタンスを公開
-// Content Script と Popup で共有
-if (typeof window !== 'undefined') {
-  window.nicoListStorage = new NicoListStorage();
-}
+// Content Script, Popup, Service Worker (self) で共有
+const globalScope = typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : {});
+globalScope.nicoListStorage = new NicoListStorage();
